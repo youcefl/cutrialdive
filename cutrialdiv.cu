@@ -69,7 +69,7 @@ auto smarandache(uint64_t n)
 
 
 __device__
-uint64_t reciprocal(uint64_t d)
+uint64_t reciprocal32(uint64_t d)
 {
     return (~uint64_t(0) - (d - 1)) / d + 1;
 }
@@ -126,7 +126,7 @@ void tdiv(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
 	    uint64_t r = 0;
 	    auto d = p[i];
 	    auto b = base_mod(d);
-	    auto rd = reciprocal(d);
+	    auto rd = reciprocal32(d);
 	    for(auto j = nlen - 1; ; --j) {
 	        r = fmamod(r, b, n[j], d, rd);
 	        if(!j) {
@@ -138,6 +138,84 @@ void tdiv(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
 	    }
 	}
 }
+
+
+// Used inside reciprocal(uint64_t) (and only there).
+__device__
+uint_fast32_t inner_reciprocal(uint32_t & a2, uint32_t & a1, uint32_t & a0, uint64_t d)
+{
+    auto q = ((uint64_t(a2) << 32) | a1) / (d >> 32);
+    if (q > 0xffffffff)
+        q = 0xffffffff;
+    uint64_t qdl = q * d;
+    uint64_t qdh = __umul64hi(q, d);
+    while ((qdh > a2) || ((qdh == a2) && (qdl > ((uint64_t(a1) << 32) | a0))))  {
+        --q;
+        if (qdl < d) {
+            --qdh;
+        }
+        qdl -= d;
+    }
+    if (a0 < (qdl & 0xffffffff)) {
+        --a1;
+    }
+    a0 -= qdl & 0xffffffff;
+    if (a1 < (qdl >> 32)) {
+        --a2;
+    }
+    a1 -= qdl >> 32;
+    a2 -= qdh;
+    return q;        
+}
+
+
+// Returns floor((B^2 - 1) / d) - B = floor(((B - 1 - d) * B + B - 1) / d) where B = 2^64
+// Assumes 2^63 <= d < 2^64 i.e. most significant bit of d must be set
+__device__
+uint64_t reciprocal(uint64_t d)
+{
+    // <B-1-d, B-1> / d
+    auto a = ~uint64_t{} - d;
+    uint32_t a3 = a >> 32, a2 = a & 0xffffffff;
+    uint32_t a1 = 0xffffffff, a0 = a1;
+    auto q1 = inner_reciprocal(a3, a2, a1, d);
+    auto q0 = inner_reciprocal(a2, a1, a0, d);
+    return (uint64_t(q1) << 32) | q0;
+}
+
+// Tests reciprocal on the device
+__global__
+void treciprocal()
+{
+    struct testcase { uint64_t input; uint64_t expected; };
+    constexpr auto testcaseSize = 24;
+    testcase tvec[testcaseSize] = { 
+          {0x8000000000000000, 0xffffffffffffffff}, {0x8000000000000001, 0xfffffffffffffffc}
+        , {0x8000000000000002, 0xfffffffffffffff8}, {0x8000000000000003, 0xfffffffffffffff4}
+        , {0xffffffffffffffff, 0x0000000000000001}, {0xfffffffffffffffe, 0x0000000000000002}
+        , {0xfffffffffffffffd, 0x0000000000000003}, {0xfffffffffffffffc, 0x0000000000000004}
+        , {0xfffffffffffffffb, 0x0000000000000005}, {0xff00ff00ff00ff00, 0x0100000000000001}
+        , {0xfe000000ffffffff, 0x0204080f1c3460b3}, {0xff00000000000000, 0x0101010101010101}
+        , {0xfdfdfdfdfdfdfdfd, 0x02061236a3ebc34a}, {0xa68d164e738685dc, 0x897d219bfdaf4388}
+        , {0x82bf6e750f72fbeb, 0xf53d68328e2b07e2}, {0x915be40a6e3459d6, 0xc2db378ada15a0be}
+        , {0xa890630f91cbdf17, 0x84ca3ca49f815c02}, {0x9603e01e9352f3c9, 0xb4dcd1d74a60f12a}
+        , {0xb88072660b8881aa, 0x63348f4a3d64d9f7}, {0xfbbc44125f5cb984, 0x04563a985b4a878f}
+        , {0x935613859937496c, 0xbcce438cd4fbc361}, {0xf1797c593356ac16, 0x0f6631c930b05025}
+        , {0xe28323756b21a609, 0x215395b2245b5ddd}, {0x9541d0d870c791c3, 0xb714d0c552f0a5c9}
+    };
+
+    for (auto i = 0; i < testcaseSize; ++i) {
+        auto const & t = tvec[i];
+        auto expect = t.expected;
+        auto actual = reciprocal(t.input);
+        if (expect != actual) {
+            printf("FAIL -> reciprocal(%" PRIu64 ")\n", t.input); 
+            printf("    expected: %" PRIu64 " | <low = %d, high = %d>\n", expect, uint32_t(expect & 0xffffffff), uint32_t(expect >> 32));
+            printf("      actual: %" PRIu64 " | <low = %d, high = %d>\n", actual, uint32_t(actual & 0xffffffff), uint32_t(actual >> 32));
+        }
+    }
+}
+
 
 const std::array<uint64_t, 54> primes8 = {
       2,   3,   5,   7,  11,  13,  17,  19,  23,  29,
@@ -523,6 +601,10 @@ int autotest()
                 std::cerr << "  Actual: "; output_range(std::cerr, primes); std::cerr << std::endl;
             }
         }
+        {
+            treciprocal<<<1, 1>>>();
+            cudaDeviceSynchronize();
+        }
         std::cout << "Done" << std::endl;
         return 0;
 }
@@ -569,10 +651,11 @@ int main(int argc, char** argv)
                 ; k1 <= (uint64_t(1) << 32)
                 ; k0 = k1, k1 += uint64_t(1) << 22) {
             sieve(primes, k0, k1);
-            if (!devicePrimes) {
-		        cudaMalloc(&devicePrimes, primes.size() * sizeof(primes[0]));
-		    } else if (primes.size() > primesSize) {
-		        cudaFree(devicePrimes);
+
+		    if (primes.size() > primesSize) {
+		        if (devicePrimes) {
+		            cudaFree(devicePrimes);
+	            }
 		        cudaMalloc(&devicePrimes, primes.size() * sizeof(primes[0]));
 		    }
             primesSize = primes.size();
