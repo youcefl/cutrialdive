@@ -116,27 +116,37 @@ auto fmamod(uint64_t r, uint64_t b, uint64_t n, uint64_t d, uint64_t rd)
     return (r < d - n) ? r + n : r - (d - n);
 }
 
-__global__
-void tdiv(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
+// Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
+__device__
+uint64_t normalize(uint64_t d)
 {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
-    int stride = blockDim.x * gridDim.x;
+    // CUDA-specific __nv_clzll returns number of consecutive leading zero bits,
+    // starting at most significant bit.
+    return d << __clzll(d);
+}
 
-	for(size_t i = index; i < plen; i += stride) {
-	    uint64_t r = 0;
-	    auto d = p[i];
-	    auto b = base_mod(d);
-	    auto rd = reciprocal32(d);
-	    for(auto j = nlen - 1; ; --j) {
-	        r = fmamod(r, b, n[j], d, rd);
-	        if(!j) {
-	            break;
-	        }
-	    }
-	    if (!r) {
-	        printf("%" PRIu64 "\n", p[i]);
-	    }
-	}
+
+// Returns (u1 * 2^64 + u0) mod d
+// Assumes u1 < d, 2^63 <= d < 2^64 and rnd is the reciprocal of d
+// i.e. rnd = floor((2^128 - 1) / d) - d
+__device__
+uint64_t mod2by1(uint64_t u1, uint64_t u0, uint64_t d, uint64_t rnd)
+{
+    uint64_t q1 = __umul64hi(u1, rnd), q0 = u1 * rnd;
+    q0 += u0;
+    if (q0 < u0) {
+        ++q1;
+    }
+    q1 += u1;
+    ++q1;
+    auto r = u0 - q1 * d;
+    if (r > q0) {
+        r += d;
+    }
+    if (r >= d) {
+        r -= d;
+    }
+    return r;
 }
 
 
@@ -183,6 +193,46 @@ uint64_t reciprocal(uint64_t d)
     return (uint64_t(q1) << 32) | q0;
 }
 
+// Computes N % d where N = <n[nlen-1], ..., n[1], n[0]>
+//  = n[0] + 2^64*n[1] + ... + 2^(64*(nlen-1))*n[nlen-1]
+__device__
+uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d)
+{
+    uint64_t r = 0;
+    auto nd = normalize(d);
+    auto rnd = reciprocal(normalize(d));
+    for(auto j = nlen - 1; ; --j) {
+        r = mod2by1(r, n[j], nd, rnd);
+        if(!j) {
+            break;
+        }
+    }
+    return r % d;
+}
+
+template <size_t N>
+__device__
+uint64_t modnby1(uint64_t (&n) [N], uint64_t d)
+{
+    return modnby1(&n[0], N, d);
+}
+
+
+__global__
+void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
+{
+    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+
+	for(size_t i = index; i < plen; i += stride) {
+	    if (!modnby1(n, nlen, p[i])) {
+	        printf("%" PRIu64 "\n", p[i]);
+	    }
+	}
+}
+
+
+
 // Tests reciprocal on the device
 __global__
 void treciprocal()
@@ -210,10 +260,73 @@ void treciprocal()
         auto actual = reciprocal(t.input);
         if (expect != actual) {
             printf("FAIL -> reciprocal(%" PRIu64 ")\n", t.input); 
-            printf("    expected: %" PRIu64 " | <low = %d, high = %d>\n", expect, uint32_t(expect & 0xffffffff), uint32_t(expect >> 32));
-            printf("      actual: %" PRIu64 " | <low = %d, high = %d>\n", actual, uint32_t(actual & 0xffffffff), uint32_t(actual >> 32));
+            printf("    expected: %" PRIu64 " | <low = %u, high = %u>\n", expect, uint32_t(expect & 0xffffffff), uint32_t(expect >> 32));
+            printf("      actual: %" PRIu64 " | <low = %u, high = %u>\n", actual, uint32_t(actual & 0xffffffff), uint32_t(actual >> 32));
         }
     }
+}
+
+// Test mod2by1 on the device
+__global__
+void tmod2by1()
+{
+    struct testcase { uint64_t u1, u0, d, rnd, expected; };
+    testcase tvec[] = { 
+          {               0x0,                0x0, 0x8000000000000000, 0xffffffffffffffff,                0x0}
+        , {               0x1,                0x1, 0x8000000000000000, 0xffffffffffffffff,                0x1}
+        , {0x0fffffffffffffff, 0x0fffffffffffffff, 0x8000000000000000, 0xffffffffffffffff, 0x0fffffffffffffff}
+        , {               0x0, 0xffffffffffffffff, 0xc5bb533e4317e471, 0x4b705f0c618a3b59, 0x3a44acc1bce81b8e}
+        , {0xfffffffffffffffe, 0xffffffffffffffff, 0xffffffffffffffff, 0x0000000000000001, 0xfffffffffffffffe}
+        , {0xfcfcfcfcfcfcfcfc, 0xffffffffffffffff, 0xfcfcfcfcfcfcfcfd, 0x030c30c30c30c30c, 0xfcfcfcfcfcfcfcfc}
+        , {        0xffffffff, 0xeeeeeeeeeeeeeeee, 0x97fe9508a59e5231, 0xaf2c716780c9f84d, 0x3b6623c2ca883c37}
+    };
+    constexpr auto testcaseSize = sizeof(tvec)/sizeof(tvec[0]);
+
+    for (auto i = 0; i < testcaseSize; ++i) {
+        auto const & t = tvec[i];
+        auto expect = t.expected;
+        auto actual = mod2by1(t.u1, t.u0, t.d, t.rnd);
+        if (expect != actual) {
+            printf("FAIL -> mod2by1(<%" PRIu64 ", %" PRIu64 ">, %" PRIu64 ", %" PRIu64 ")\n", t.u1, t.u0, t.d, t.rnd); 
+            printf("    expected: %" PRIu64 " | <low = %u, high = %u>\n", expect, uint32_t(expect & 0xffffffff), uint32_t(expect >> 32));
+            printf("      actual: %" PRIu64 " | <low = %u, high = %u>\n", actual, uint32_t(actual & 0xffffffff), uint32_t(actual >> 32));
+        }
+    }
+}
+
+
+__global__
+void tmodnby1()
+{
+    uint64_t two192m1[] = {0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff};
+    uint64_t m521[] = { 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff
+                      , 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff
+                      , 511 };
+
+    struct testcase { uint64_t * n, nlen, d, expected; };
+#define NS(n) n, sizeof(n)/sizeof(n[0])
+#define TC testcase
+    testcase tvec[] = {
+          TC{NS(two192m1), 1, 0}, TC{NS(two192m1), 2, 1}, TC{NS(two192m1), 3, 0}
+        , TC{NS(two192m1), 197, 36}, TC{NS(two192m1), 0xffffffffffffffff, 0}
+        , TC{NS(m521), 2, 1}, TC{NS(m521), 1 << 13, (1 << 13) - 1}
+        , TC{NS(m521), 1ull << 63, (1ull << 63) - 1}
+    };
+#undef NS
+#undef TC  
+    constexpr auto testcaseSize = sizeof(tvec)/sizeof(tvec[0]);
+    
+    for (auto i = 0; i < testcaseSize; ++i) {
+        auto const & t = tvec[i];
+        auto expect = t.expected;
+        auto actual = modnby1(t.n, t.nlen, t.d);
+        if (expect != actual) {
+            printf("FAIL -> modnby1(2^192-1, 2)\n");
+            printf("    expected: %" PRIu64 "\n", expect);
+            printf("      actual: %" PRIu64 "\n", actual);
+        }
+    }
+    
 }
 
 
@@ -605,6 +718,14 @@ int autotest()
             treciprocal<<<1, 1>>>();
             cudaDeviceSynchronize();
         }
+        {
+            tmod2by1<<<1, 1>>>();
+            cudaDeviceSynchronize();
+        }
+        {
+            tmodnby1<<<1, 1>>>();
+            cudaDeviceSynchronize();
+        }
         std::cout << "Done" << std::endl;
         return 0;
 }
@@ -661,7 +782,7 @@ int main(int argc, char** argv)
             primesSize = primes.size();
 		    cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
             
-		    tdiv<<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+		    trial_div<<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
 		    cuStatus = cudaDeviceSynchronize();
 		    if(cuStatus != cudaSuccess) {
 			    std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
