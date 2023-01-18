@@ -4,17 +4,16 @@
 */
 
 #include <cinttypes>
+#include <cassert>
+#include <algorithm>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <iterator>
 #include <vector>
 #include <thread>
 
-#include <yampp.hpp>
-
-namespace yp {
-	using namespace yampp;
-}
+#include "hgint.hpp"
 
 template <typename It>
 std::ostream & output_range(std::ostream & out, It is, It ie)
@@ -44,21 +43,21 @@ auto smarandache(uint64_t n)
 		return T{n};
 	}
 	auto log10n = 0;
-	for(auto d = 1; (d *= 10) <= n;) {
+	for(uint64_t d = 1; (d *= 10) <= n;) {
 		++log10n;
 	}
-	const auto c3 = T{1490840987654358ull} * yp::pow(T{10}, 180) - T{10990220};
-	const auto c4 = yp::pow(T{10}, 2701) * c3 * T{10201} - T{1109890222000ull};
-	const auto c5 = yp::pow(T{10}, 36000) * c4 * T{123454321} - T{123443211358} * yp::pow(T{33300}, 2);
+	const auto c3 = T{1490840987654358ull} * pow(T{10}, 180) - T{10990220};
+	const auto c4 = pow(T{10}, 2701) * c3 * T{10201} - T{1109890222000ull};
+	const auto c5 = pow(T{10}, 36000) * c4 * T{123454321} - T{123443211358} * pow(T{33300}, 2);
 	static const std::array<std::function<T(uint64_t)>, 5> sm = {
-		  [](auto x) { return (yp::pow(T{10}, x + 1) - T{9 * x + 10}) / T{81}; }
-		, [](auto x) { return (yp::pow(T{10}, 2*x - 18) * T{uint64_t(123456789)*99*99 + 991} 
+		  [](auto x) { return (pow(T{10}, x + 1) - T{9 * x + 10}) / T{81}; }
+		, [](auto x) { return (pow(T{10}, 2*x - 18) * T{uint64_t(123456789)*99*99 + 991} 
 												- T{99 * x + 100}) / T{9801}; }
-		, [&](auto x) { return (c3 * yp::pow(T{10}, 3*x - 296) - T{120879* x + 121000}) 
+		, [&](auto x) { return (c3 * pow(T{10}, 3*x - 296) - T{120879* x + 121000}) 
 										/ T{120758121}; }
-		, [&](auto x) { return (c4 * yp::pow(T{10}, 4*(x - 999)) - T{12321} * T{ 9999*x + 10000 }) 
+		, [&](auto x) { return (c4 * pow(T{10}, 4*(x - 999)) - T{12321} * T{ 9999*x + 10000 }) 
 										/ T{1231853592321ull}; }
-		, [&](auto x) { return (c5 * yp::pow(T{10}, 5*(x - 9999)) - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
+		, [&](auto x) { return (c5 * pow(T{10}, 5*(x - 9999)) - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
 		                                / (T{12321} * T{1234321} * T{99999} * T{99999}); }
 		};
 	if(log10n < sm.size()) {
@@ -754,11 +753,10 @@ int main(int argc, char** argv)
     }
     
 
-	using HgInt =  yp::Int<uint64_t>;
 	try {
-		auto sm671 = smarandache<yp::Int<uint64_t>>(ii);
-		auto * n = (uint64_t*)&(*((std::vector<uint64_t>*)&sm671))[0];
-		auto nlen = ((std::vector<uint64_t>*)&sm671)->size();
+		auto sm671 = smarandache<HgInt>(ii);
+		auto * n = sm671.limbs();
+		auto nlen = sm671.size();
 
 		std::cout << "Smarandache(" << ii << ") = 0x" << std::hex << n[nlen-1] 
 			<< "..." << n[0] <<  ", length = " << std::dec << nlen << " 64-bit words" << std::endl;
