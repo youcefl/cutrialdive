@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <vector>
+#include <thread>
 
 #include <yampp.hpp>
 
@@ -68,53 +69,44 @@ auto smarandache(uint64_t n)
 }
 
 
-__device__
-uint64_t reciprocal32(uint64_t d)
+template <typename It, typename Func, typename StopCond>
+void parallel_for_each(int nbThreads, It first, It last, Func f, StopCond s)
 {
-    return (~uint64_t(0) - (d - 1)) / d + 1;
-}
-
-__device__
-uint64_t mod(uint64_t x, uint64_t d, uint64_t rd)
-{
-    auto q = __umul64hi(x, rd);
-    auto r = x - q * d;
-    return r >= d ? r - d : r;
-}
-
-/// Returns 2^64 mod d
-__device__
-uint64_t base_mod(uint64_t d)
-{
-    auto b = (uint64_t(1) << 63) % d;
-    return (b >= (d >> 1)) ? b - (d - b) : b << 1;
-}
-
-// Returns (r*2^64 + n) mod d
-__device__
-auto fmamod(uint64_t r, uint64_t n, uint64_t d)
-{
-    r %= d;
-    for(int i = 64; i--; ) {
-        r = (r >= (d >> 1)) ? r - (d - r) : r << 1;
+    if (nbThreads < 2) {
+        for (; first != last; ++first) {
+            if (s(*first)) {
+                break;
+            }
+            f(*first);
+        }
+        return;
     }
-    n %= d;
-    return (r < d - n) ? r + n : r - (d - n);
+    std::vector<std::thread> workers;
+    for(int i = 0; i < nbThreads; ++i) {
+        if (std::distance(first, last) <= i) {
+            break;
+        }
+        workers.emplace_back(std::thread{[&f, &s, first, last, i]() {
+                const auto st = i + 1;
+                for (auto it = first + i; ; it = it + st) {
+                    if (s(*it)) {
+                        break;
+                    }
+                    f(*it);
+                    if (std::distance(it, last) <= st) {
+                        break;
+                    }
+                } 
+            }});
+    }
+    std::for_each(std::begin(workers), std::end(workers), [](auto & t) {
+            if (t.joinable()) {
+                t.join();
+            }
+        });
 }
 
-// Returns (r*b + n) mod d
-// d shall not be zero.
-// r is assumed to be < d.
-// rd is assumed to be the reciprocal of d.
-// !! Assumes both r and b < 2^32 !!
-__device__
-auto fmamod(uint64_t r, uint64_t b, uint64_t n, uint64_t d, uint64_t rd)
-{
-    // r %= d; useless because r is guaranteed to be < d
-    r = mod(r * b, d, rd);
-    n = mod(n, d, rd);
-    return (r < d - n) ? r + n : r - (d - n);
-}
+
 
 // Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
 __device__
@@ -217,16 +209,29 @@ uint64_t modnby1(uint64_t (&n) [N], uint64_t d)
     return modnby1(&n[0], N, d);
 }
 
-
+template <uint8_t BatchSize>
 __global__
 void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
 {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
-    int stride = blockDim.x * gridDim.x;
+    int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
+    int stride = blockDim.x * gridDim.x * BatchSize;
 
 	for(size_t i = index; i < plen; i += stride) {
-	    if (!modnby1(n, nlen, p[i])) {
-	        printf("%" PRIu64 "\n", p[i]);
+	    uint64_t pp = p[i];
+	    for(auto j = 1; j < BatchSize; ++j) {
+	        if (i + j >= plen) {
+	            break;
+	        }
+	        pp *= p[i + j];
+	    }
+	    auto mod = modnby1(n, nlen, pp);
+	    for (auto j = 0; j < BatchSize; ++j) {
+	        if (i + j >= plen) {
+	            break;
+	        }
+	        if (! (mod % p[i + j]) ) {
+	            printf("%" PRIu64 "\n", p[i + j]);
+	        }
 	    }
 	}
 }
@@ -415,27 +420,30 @@ void sieve(std::vector<uint64_t> & primes, uint64_t n0, uint64_t n1)
             primes.reserve((n1 - n0 + 1) / 2);
         }
         auto i0 = primes.size();
-        //std::cout << "n1 = " << n1 << std::endl;
         n0 = n0 + ((n0 ^ 1) & 1);
         for (auto x = n0; x < n1; x += 2) {
-            //std::cout << "Pushing " << x << std::endl;
             primes.push_back(x);
         }
         if (primes.size() == i0) {
             return;
         }
-        //std::cout << "vector of primes is now: "; output_range(std::cout, primes); std::cout << std::endl;
-        for (auto it = std::begin(primes16) + 1; it != std::end(primes16); ++it) {
-            auto sp = *it;
+        /*parallel_for_each(4, std::begin(primes16) + 1, std::end(primes16), [&primes, n0, i0](uint64_t sp) {
+                    auto s = ((n0 + sp - 1) / sp) * sp;
+                    for(auto k = i0 + ((s & 1) ? (s - n0) / 2 : (s + sp - n0) / 2); k < primes.size(); k += sp) {
+                        primes[k] = 0;
+                    }
+              }
+            , [n1](uint64_t x) { return x * x >= n1; }
+            );*/
+        for (auto i = 1; i < primes16.size(); ++i) {
+            auto sp = primes16[i];
             if( sp * sp >= n1 ) {
                 break;
             }
-            //std::cout << "Removing multiples of " << sp << std::endl;
             auto s = ((n0 + sp - 1) / sp) * sp;
             for(auto k = i0 + ((s & 1) ? (s - n0) / 2 : (s + sp - n0) / 2); k < primes.size(); k += sp) {
                 primes[k] = 0;
             }
-            //std::cout << "vector of primes is now: "; output_range(std::cout, primes); std::cout << std::endl;
         }
         primes.erase(std::remove(std::begin(primes) + i0, std::end(primes), 0), std::end(primes));
         return;
@@ -768,9 +776,9 @@ int main(int argc, char** argv)
         std::vector<uint64_t> primes;
         uint64_t * devicePrimes{};
         auto primesSize = primes.size();
-        for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 22
+        for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 21
                 ; k1 <= (uint64_t(1) << 32)
-                ; k0 = k1, k1 += uint64_t(1) << 22) {
+                ; k0 = k1, k1 += uint64_t(1) << 21) {
             sieve(primes, k0, k1);
 
 		    if (primes.size() > primesSize) {
@@ -781,8 +789,13 @@ int main(int argc, char** argv)
 		    }
             primesSize = primes.size();
 		    cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
-            
-		    trial_div<<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+            if (k1 <= 2642258) {
+		        trial_div<3><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+		    } else if (k1 <= (1ull << 32)) {
+		        trial_div<2><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+		    } else {
+		        trial_div<1><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+		    }
 		    cuStatus = cudaDeviceSynchronize();
 		    if(cuStatus != cudaSuccess) {
 			    std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
