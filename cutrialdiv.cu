@@ -39,32 +39,32 @@ std::ostream & output_range(std::ostream & out, T const & vec)
 template <typename T>
 auto smarandache(uint64_t n)
 {
-	if(!n || n == 1) {
-		return T{n};
-	}
-	auto log10n = 0;
-	for(uint64_t d = 1; (d *= 10) <= n;) {
-		++log10n;
-	}
-	const auto c3 = T{1490840987654358ull} * pow(T{10}, 180) - T{10990220};
-	const auto c4 = pow(T{10}, 2701) * c3 * T{10201} - T{1109890222000ull};
-	const auto c5 = pow(T{10}, 36000) * c4 * T{123454321} - T{123443211358} * pow(T{33300}, 2);
-	static const std::array<std::function<T(uint64_t)>, 5> sm = {
-		  [](auto x) { return (pow(T{10}, x + 1) - T{9 * x + 10}) / T{81}; }
-		, [](auto x) { return (pow(T{10}, 2*x - 18) * T{uint64_t(123456789)*99*99 + 991} 
-												- T{99 * x + 100}) / T{9801}; }
-		, [&](auto x) { return (c3 * pow(T{10}, 3*x - 296) - T{120879* x + 121000}) 
-										/ T{120758121}; }
-		, [&](auto x) { return (c4 * pow(T{10}, 4*(x - 999)) - T{12321} * T{ 9999*x + 10000 }) 
-										/ T{1231853592321ull}; }
-		, [&](auto x) { return (c5 * pow(T{10}, 5*(x - 9999)) - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
-		                                / (T{12321} * T{1234321} * T{99999} * T{99999}); }
-		};
-	if(log10n < sm.size()) {
-		return sm[log10n](n);
-	} else {
-		throw std::exception{};
-	}
+    if(!n || n == 1) {
+        return T{n};
+    }
+    auto log10n = 0;
+    for(uint64_t d = 1; (d *= 10) <= n;) {
+        ++log10n;
+    }
+    const auto c3 = T{1490840987654358ull} * pow(T{10}, 180) - T{10990220};
+    const auto c4 = pow(T{10}, 2701) * c3 * T{10201} - T{1109890222000ull};
+    const auto c5 = pow(T{10}, 36000) * c4 * T{123454321} - T{123443211358} * pow(T{33300}, 2);
+    static const std::array<std::function<T(uint64_t)>, 5> sm = {
+          [](auto x) { return (pow(T{10}, x + 1) - T{9 * x + 10}) / T{81}; }
+        , [](auto x) { return (pow(T{10}, 2*x - 18) * T{uint64_t(123456789)*99*99 + 991} 
+                                                - T{99 * x + 100}) / T{9801}; }
+        , [&](auto x) { return (c3 * pow(T{10}, 3*x - 296) - T{120879* x + 121000}) 
+                                        / T{120758121}; }
+        , [&](auto x) { return (c4 * pow(T{10}, 4*(x - 999)) - T{12321} * T{ 9999*x + 10000 }) 
+                                        / T{1231853592321ull}; }
+        , [&](auto x) { return (c5 * pow(T{10}, 5*(x - 9999)) - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
+                                        / (T{12321} * T{1234321} * T{99999} * T{99999}); }
+        };
+    if(log10n < sm.size()) {
+        return sm[log10n](n);
+    } else {
+        throw std::exception{};
+    }
 }
 
 
@@ -105,6 +105,9 @@ void parallel_for_each(int nbThreads, It first, It last, Func f, StopCond s)
         });
 }
 
+static const size_t DEVICE_FACTORS_SIZE = 20000;
+__device__ __managed__ uint64_t deviceFactors[DEVICE_FACTORS_SIZE];
+__device__ __managed__ int deviceFactorsCount = 0;
 
 
 // Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
@@ -208,6 +211,14 @@ uint64_t modnby1(uint64_t (&n) [N], uint64_t d)
     return modnby1(&n[0], N, d);
 }
 
+
+__device__
+void pushFactor(uint64_t ff)
+{
+    auto factorIdx = atomicAdd(&deviceFactorsCount, 1);
+    deviceFactors[factorIdx] = ff;
+}
+
 template <uint8_t BatchSize>
 __global__
 void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
@@ -215,26 +226,32 @@ void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
     int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
     int stride = blockDim.x * gridDim.x * BatchSize;
 
-	for(size_t i = index; i < plen; i += stride) {
-	    uint64_t pp = p[i];
-	    for(auto j = 1; j < BatchSize; ++j) {
-	        if (i + j >= plen) {
-	            break;
-	        }
-	        pp *= p[i + j];
-	    }
-	    auto mod = modnby1(n, nlen, pp);
-	    for (auto j = 0; j < BatchSize; ++j) {
-	        if (i + j >= plen) {
-	            break;
-	        }
-	        if (! (mod % p[i + j]) ) {
-	            printf("%" PRIu64 "\n", p[i + j]);
-	        }
-	    }
-	}
+    for(size_t i = index; i < plen; i += stride) {
+        uint64_t pp = p[i];
+        for(auto j = 1; j < BatchSize; ++j) {
+            if (i + j >= plen) {
+                break;
+            }
+            pp *= p[i + j];
+        }
+        auto mod = modnby1(n, nlen, pp);
+        for (auto j = 0; j < BatchSize; ++j) {
+            if (i + j >= plen) {
+                break;
+            }
+            if (! (mod % p[i + j]) ) {
+                pushFactor(p[i + j]);
+            }
+        }
+    }
 }
 
+std::vector<uint64_t> getFactorsFromDevice()
+{
+    auto ret = std::vector<uint64_t>{deviceFactors, deviceFactors + deviceFactorsCount};
+    std::sort(std::begin(ret), std::end(ret));
+    return ret;
+}
 
 
 // Tests reciprocal on the device
@@ -738,6 +755,7 @@ int autotest()
 }
 
 
+
 int main(int argc, char** argv)
 {
     if ((argc == 2) && (std::string(argv[1]) == "-t")) {
@@ -753,20 +771,22 @@ int main(int argc, char** argv)
     }
     
 
-	try {
-		auto sm671 = smarandache<HgInt>(ii);
-		auto * n = sm671.limbs();
-		auto nlen = sm671.size();
+    try {
+        auto sm671 = smarandache<HgInt>(ii);
+        auto * n = sm671.limbs();
+        auto nlen = sm671.size();
+        auto sizeInBase10 = sm671.sizeInBase(10);
 
-		std::cout << "Smarandache(" << ii << ") = 0x" << std::hex << n[nlen-1] 
-			<< "..." << n[0] <<  ", length = " << std::dec << nlen << " 64-bit words" << std::endl;
+        std::cout << "Smarandache(" << ii << ") = 0x" << std::hex << n[nlen-1] 
+            << "..." << n[0] <<  ", length = " << std::dec << nlen << " 64-bit words, "
+            <<  sizeInBase10 << " digits" << std::endl;
 
-	    uint64_t * cn;
-	    auto cuStatus = cudaMalloc(&cn, nlen*sizeof(uint64_t));
-	    if(cuStatus != cudaSuccess) {
-		    std::cerr << "Error returned by cudaMalloc(): " << cudaGetErrorString(cuStatus) << std::endl;
-	    }
-	    cudaMemcpy(cn, n, nlen*sizeof(uint64_t), cudaMemcpyHostToDevice);
+        uint64_t * cn;
+        auto cuStatus = cudaMalloc(&cn, nlen*sizeof(uint64_t));
+        if(cuStatus != cudaSuccess) {
+            std::cerr << "Error returned by cudaMalloc(): " << cudaGetErrorString(cuStatus) << std::endl;
+        }
+        cudaMemcpy(cn, n, nlen*sizeof(uint64_t), cudaMemcpyHostToDevice);
 
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
@@ -776,44 +796,59 @@ int main(int argc, char** argv)
         auto primesSize = primes.size();
         for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 21
                 ; k1 <= (uint64_t(1) << 32)
-                ; k0 = k1, k1 += uint64_t(1) << 21) {
+                ; k0 = k1, k1 += uint64_t(1) << 21
+            ) {
             sieve(primes, k0, k1);
 
-		    if (primes.size() > primesSize) {
-		        if (devicePrimes) {
-		            cudaFree(devicePrimes);
-	            }
-		        cudaMalloc(&devicePrimes, primes.size() * sizeof(primes[0]));
-		    }
+            if (primes.size() > primesSize) {
+                if (devicePrimes) {
+                    cudaFree(devicePrimes);
+                }
+                cudaMalloc(&devicePrimes, primes.size() * sizeof(primes[0]));
+            }
             primesSize = primes.size();
-		    cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
+            cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
             if (k1 <= 2642258) {
-		        trial_div<3><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
-		    } else if (k1 <= (1ull << 32)) {
-		        trial_div<2><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
-		    } else {
-		        trial_div<1><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
-		    }
-		    cuStatus = cudaDeviceSynchronize();
-		    if(cuStatus != cudaSuccess) {
-			    std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
-				    cudaGetErrorString(cuStatus) << std::endl;
-			    int devCount = 0;
-			    cuStatus = cudaGetDeviceCount(&devCount);
-			    if(cuStatus != cudaSuccess) {
-				    std::cerr << "Error returned by cudaGetDeviceCount(int*): " <<
-					    cudaGetErrorString(cuStatus) << std::endl;
-			    }
-		    }
-		}
-		if (devicePrimes) {
-	        cudaFree(devicePrimes);
-	    }
-	    cudaFree(cn);
-	} catch (std::exception const & ex) {
-		std::cerr << "Error: " << ex.what() << std::endl;
-		return 3;
-	}
-	return 0;
+                trial_div<3><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+            } else if (k1 <= (1ull << 32)) {
+                trial_div<2><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+            } else {
+                trial_div<1><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+            }
+            cuStatus = cudaDeviceSynchronize();
+            if(cuStatus != cudaSuccess) {
+                std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
+                    cudaGetErrorString(cuStatus) << std::endl;
+                int devCount = 0;
+                cuStatus = cudaGetDeviceCount(&devCount);
+                if(cuStatus != cudaSuccess) {
+                    std::cerr << "Error returned by cudaGetDeviceCount(int*): " <<
+                        cudaGetErrorString(cuStatus) << std::endl;
+                }
+            }
+        }
+        if (devicePrimes) {
+            cudaFree(devicePrimes);
+        }
+        cudaFree(cn);
+        auto foundFactors = getFactorsFromDevice();
+        std::cout << "Found " << foundFactors.size() << " factor(s)";
+        bool isFirst = true;
+        for(auto const & f : foundFactors) {
+            if(!isFirst) {
+                std::cout << ", ";
+            } else {
+                std::cout << ":" << std::endl;
+            }
+            std::cout << f;
+            isFirst = false;
+        }
+        std::cout << std::endl;
+        
+    } catch (std::exception const & ex) {
+        std::cerr << "Error: " << ex.what() << std::endl;
+        return 3;
+    }
+    return 0;
 }
 

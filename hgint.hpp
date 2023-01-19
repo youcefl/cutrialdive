@@ -43,6 +43,7 @@ public:
     HgInt & operator/=(uint64_t x);
     mp_limb_t const * limbs() const;
     std::size_t size() const;
+    std::size_t sizeInBase(int base) const;
     friend HgInt pow(HgInt x, uint64_t y);
 private:
     mpz_t val_;
@@ -61,6 +62,13 @@ std::size_t HgInt::size() const
 {
     return mpz_size(val_);
 }
+
+HGINT_INLINE
+std::size_t HgInt::sizeInBase(int base) const
+{
+    return mpz_sizeinbase(val_, base);
+}
+
 
 HGINT_INLINE
 HgInt::~HgInt()
