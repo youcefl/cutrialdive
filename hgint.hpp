@@ -41,6 +41,8 @@ public:
     HgInt & operator*=(uint64_t x);
     HgInt & operator/=(HgInt const& x);
     HgInt & operator/=(uint64_t x);
+    mpz_t const & get() const;
+    mpz_t & get();
     mp_limb_t const * limbs() const;
     std::size_t size() const;
     std::size_t sizeInBase(int base) const;
@@ -49,7 +51,19 @@ private:
     mpz_t val_;
 };
 
-#define HGINT_INLINE
+#define HGINT_INLINE inline
+
+HGINT_INLINE
+mpz_t const & HgInt::get() const
+{
+    return val_;
+}
+
+HGINT_INLINE
+mpz_t & HgInt::get()
+{
+    return val_;
+}
 
 HGINT_INLINE
 mp_limb_t const * HgInt::limbs() const
@@ -136,10 +150,12 @@ HgInt & HgInt::operator+=(uint64_t x)
     mpz_add_ui(val_, val_, x);
     return *this;
 }
+HGINT_INLINE
 HgInt operator+(HgInt x, HgInt const & y)
 {
     return x += y;
 }
+HGINT_INLINE
 HgInt operator+(HgInt x, uint64_t y)
 {
     return x += y;
@@ -158,10 +174,12 @@ HgInt & HgInt::operator-=(uint64_t x)
     mpz_sub_ui(val_, val_, x);
     return *this;
 }
+HGINT_INLINE
 HgInt operator-(HgInt x, HgInt const & y)
 {
     return x -= y;
 }
+HGINT_INLINE
 HgInt operator-(HgInt x, uint64_t y)
 {
     return x -= y;
@@ -179,10 +197,12 @@ HgInt & HgInt::operator*=(uint64_t x)
     mpz_mul_ui(val_, val_, x);
     return *this;
 }
+HGINT_INLINE
 HgInt operator*(HgInt x, HgInt const & y)
 {
     return x *= y;
 }
+HGINT_INLINE
 HgInt operator*(HgInt x, uint64_t y)
 {
     return x *= y;

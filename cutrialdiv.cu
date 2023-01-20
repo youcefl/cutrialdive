@@ -755,6 +755,28 @@ int autotest()
 }
 
 
+// Gets the factors from the device, then repeatedly divides the number by the factors
+// to get the cofactor.
+// number <- number / (f_1^e_1*f_2^e_2...f_n^e_n)
+// @param [in/out] number which was sent to the GPU for factorization
+// @return factors (with their exponent)
+std::vector<std::pair<uint64_t, uint32_t>> getFactors(HgInt & number)
+{
+    std::vector<std::pair<uint64_t, uint32_t>> factors;
+    auto const & rawFactors = getFactorsFromDevice();
+    for(auto const & f : rawFactors) {
+        uint32_t e = 0;
+        do {
+            mpz_divexact_ui(number.get(), number.get(), f);
+            ++e;
+        } while (mpz_fdiv_ui(number.get(), f) == 0);
+        factors.push_back(std::make_pair(f, e));
+    }
+    return factors;
+}
+
+extern bool isPRP(HgInt number);
+
 
 int main(int argc, char** argv)
 {
@@ -831,7 +853,8 @@ int main(int argc, char** argv)
             cudaFree(devicePrimes);
         }
         cudaFree(cn);
-        auto foundFactors = getFactorsFromDevice();
+
+        auto foundFactors = getFactors(sm671);
         std::cout << "Found " << foundFactors.size() << " factor(s)";
         bool isFirst = true;
         for(auto const & f : foundFactors) {
@@ -840,10 +863,16 @@ int main(int argc, char** argv)
             } else {
                 std::cout << ":" << std::endl;
             }
-            std::cout << f;
+            std::cout << f.first;
+            if (f.second > 1) {
+                std::cout << "^" << f.second;
+            }
             isFirst = false;
         }
         std::cout << std::endl;
+        
+        auto hasPrpCofactor = isPRP(sm671);
+        std::cout << "Smarandache(" << ii << ") -> " << (hasPrpCofactor ? "PRP" : "C") << std::endl;
         
     } catch (std::exception const & ex) {
         std::cerr << "Error: " << ex.what() << std::endl;
