@@ -12,6 +12,7 @@
 #include <iterator>
 #include <vector>
 #include <thread>
+#include <functional>
 
 #include "hgint.hpp"
 
@@ -106,8 +107,8 @@ void parallel_for_each(int nbThreads, It first, It last, Func f, StopCond s)
 }
 
 static const size_t DEVICE_FACTORS_SIZE = 20000;
-__device__ __managed__ uint64_t deviceFactors[DEVICE_FACTORS_SIZE];
-__device__ __managed__ int deviceFactorsCount = 0;
+__device__ uint64_t deviceFactors[DEVICE_FACTORS_SIZE];
+__device__ int deviceFactorsCount = 0;
 
 
 // Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
@@ -240,6 +241,7 @@ void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
                 break;
             }
             if (! (mod % p[i + j]) ) {
+    printf("Adding factor %llu", p[i+j]);
                 pushFactor(p[i + j]);
             }
         }
@@ -248,7 +250,13 @@ void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
 
 std::vector<uint64_t> getFactorsFromDevice()
 {
-    auto ret = std::vector<uint64_t>{deviceFactors, deviceFactors + deviceFactorsCount};
+    //cudaMemcpy
+    int factorsCount = 0;
+    cudaMemcpy(&factorsCount, &deviceFactorsCount, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "factorsCount = " << factorsCount << std::endl;
+    auto ret = std::vector<uint64_t>(std::size_t(factorsCount), uint64_t(0));
+    std::cout << "Size of ret = " << ret.size() << std::endl;
+    cudaMemcpy(&ret[0], deviceFactors, sizeof(uint64_t)*factorsCount, cudaMemcpyDeviceToHost);
     std::sort(std::begin(ret), std::end(ret));
     return ret;
 }
@@ -812,7 +820,8 @@ int main(int argc, char** argv)
 
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
-
+        auto tfStart = std::chrono::high_resolution_clock::now();
+    
         std::vector<uint64_t> primes;
         uint64_t * devicePrimes{};
         auto primesSize = primes.size();
@@ -853,7 +862,8 @@ int main(int argc, char** argv)
             cudaFree(devicePrimes);
         }
         cudaFree(cn);
-
+        auto tfEnd = std::chrono::high_resolution_clock::now();
+        
         auto foundFactors = getFactors(sm671);
         std::cout << "Found " << foundFactors.size() << " factor(s)";
         bool isFirst = true;
@@ -869,9 +879,19 @@ int main(int argc, char** argv)
             }
             isFirst = false;
         }
-        std::cout << std::endl;
-        
+
+        std::cout << " [Factoring... "
+                << std::chrono::duration<double, std::milli>(tfEnd - 
+                        tfStart).count() / 1000 << "s]";
+        std::flush(std::cout);
+        auto prpStart = std::chrono::high_resolution_clock::now();
         auto hasPrpCofactor = isPRP(sm671);
+        auto prpEnd = std::chrono::high_resolution_clock::now();
+        std::cout << " [Primality testing... "
+                << std::chrono::duration<double, std::milli>(prpEnd - 
+                        prpStart).count() / 1000 << "s]"
+                << std::endl;
+
         std::cout << "Smarandache(" << ii << ") -> " << (hasPrpCofactor ? "PRP" : "C") << std::endl;
         
     } catch (std::exception const & ex) {
