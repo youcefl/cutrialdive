@@ -1,0 +1,59 @@
+/*
+* Youcef Lemsafer, 2026.04.21
+* Definition of the sieving back-end
+*/
+//
+#include <vector>
+#include <cstdint>
+#ifdef CUTRIALDIVE_HAS_PRIMESIEVE
+#include <primesieve.hpp>
+#endif
+#ifdef CUTRIALDIVE_HAS_LFP
+//#include <lfp.hpp>
+#endif
+
+#if !defined CUTRIALDIVE_HAS_PRIMESIEVE && !defined CUTRIALDIVE_HAS_LFP
+#error "One of CUTRIALDIVE_HAS_PRIMESIEVE and CUTRIALDIVE_HAS_LFP must be defined!"
+#endif
+
+namespace cutrialdive {
+
+    enum Siever {
+        primesieve,
+        lfp
+    };
+
+    template <uint32_t siever>
+    void sievex(uint64_t start, uint64_t end, std::vector<uint64_t> & primes)
+    {
+        static_assert(siever == Siever::primesieve
+            || siever == Siever::lfp);
+
+        if constexpr (siever == Siever::primesieve) {
+#ifdef CUTRIALDIVE_HAS_PRIMESIEVE
+            primesieve::generate_primes(start, end ? end : end - 1, &primes);
+#else
+            static_assert(false, "Sieving library primesieve is not available");
+#endif
+        }
+        else if constexpr(siever == Siever::lfp) {
+#ifdef CUTRIALDIVE_HAS_LFP
+            lfp::sieve_into_vector<uint64_t>(start, end, primes);
+#else
+            //static_assert(false, "Sieving library lfp is not available");
+#endif
+        }
+    }
+
+#ifdef CUTRIALDIVE_HAS_PRIMESIEVE
+    inline void sieve(uint64_t start, uint64_t end, std::vector<uint64_t> & primes)
+    {
+        sievex<Siever::primesieve>(start, end, primes);
+    }
+#elif defined CUTRIALDIVE_HAS_LFP 
+    inline std::vector<uint64_t> sieve(uint64_t start, uint64_t end)
+    {
+        sievex<Siever::primesieve>(start, end, primes);
+    }
+#endif
+}

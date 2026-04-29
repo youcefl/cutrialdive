@@ -15,6 +15,8 @@
 #include <functional>
 
 #include "hgint.hpp"
+#include "siever.hpp"
+
 
 template <typename It>
 std::ostream & output_range(std::ostream & out, It is, It ie)
@@ -67,48 +69,6 @@ auto smarandache(uint64_t n)
         throw std::exception{};
     }
 }
-
-
-template <typename It, typename Func, typename StopCond>
-void parallel_for_each(int nbThreads, It first, It last, Func f, StopCond s)
-{
-    if (nbThreads < 2) {
-        for (; first != last; ++first) {
-            if (s(*first)) {
-                break;
-            }
-            f(*first);
-        }
-        return;
-    }
-    std::vector<std::thread> workers;
-    for(int i = 0; i < nbThreads; ++i) {
-        if (std::distance(first, last) <= i) {
-            break;
-        }
-        workers.emplace_back(std::thread{[&f, &s, first, last, i]() {
-                const auto st = i + 1;
-                for (auto it = first + i; ; it = it + st) {
-                    if (s(*it)) {
-                        break;
-                    }
-                    f(*it);
-                    if (std::distance(it, last) <= st) {
-                        break;
-                    }
-                } 
-            }});
-    }
-    std::for_each(std::begin(workers), std::end(workers), [](auto & t) {
-            if (t.joinable()) {
-                t.join();
-            }
-        });
-}
-
-static const size_t DEVICE_FACTORS_SIZE = 20000;
-__device__ uint64_t deviceFactors[DEVICE_FACTORS_SIZE];
-__device__ int deviceFactorsCount = 0;
 
 
 // Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
@@ -214,15 +174,18 @@ uint64_t modnby1(uint64_t (&n) [N], uint64_t d)
 
 
 __device__
-void pushFactor(uint64_t ff)
+void pushFactor(uint64_t ff, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
-    auto factorIdx = atomicAdd(&deviceFactorsCount, 1);
+//    __syncthreads();
+    auto factorIdx = atomicAdd(deviceFactorsCount, 1);
     deviceFactors[factorIdx] = ff;
+//    printf("Device factors count = %d\n", *deviceFactorsCount);
+//    __syncthreads();
 }
 
 template <uint8_t BatchSize>
 __global__
-void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
+void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
     int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
     int stride = blockDim.x * gridDim.x * BatchSize;
@@ -241,21 +204,20 @@ void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen)
                 break;
             }
             if (! (mod % p[i + j]) ) {
-    printf("Adding factor %llu", p[i+j]);
-                pushFactor(p[i + j]);
+//    printf("Adding factor %llu\n", p[i+j]);
+                pushFactor(p[i + j], deviceFactorsCount, deviceFactors, deviceFactorsSize);
             }
         }
     }
 }
 
-std::vector<uint64_t> getFactorsFromDevice()
+std::vector<uint64_t> getFactorsFromDevice(int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
-    //cudaMemcpy
     int factorsCount = 0;
-    cudaMemcpy(&factorsCount, &deviceFactorsCount, sizeof(int), cudaMemcpyDeviceToHost);
-    std::cout << "factorsCount = " << factorsCount << std::endl;
+    cudaMemcpy(&factorsCount, deviceFactorsCount, sizeof(int), cudaMemcpyDeviceToHost);
+//    std::cout << "factorsCount = " << factorsCount << std::endl;
     auto ret = std::vector<uint64_t>(std::size_t(factorsCount), uint64_t(0));
-    std::cout << "Size of ret = " << ret.size() << std::endl;
+//    std::cout << "Size of ret = " << ret.size() << std::endl;
     cudaMemcpy(&ret[0], deviceFactors, sizeof(uint64_t)*factorsCount, cudaMemcpyDeviceToHost);
     std::sort(std::begin(ret), std::end(ret));
     return ret;
@@ -359,41 +321,6 @@ void tmodnby1()
 }
 
 
-const std::array<uint64_t, 54> primes8 = {
-      2,   3,   5,   7,  11,  13,  17,  19,  23,  29,
-     31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
-     73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
-    127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
-    179, 181, 191, 193, 197, 199, 211, 223, 227, 229,
-    233, 239, 241, 251
-};
-
-
-const std::vector<uint64_t> primes16 = [](){
-        std::vector<uint64_t> primes;
-        primes.reserve(6542); // pi(2^16) = 6542
-        std::copy(std::begin(primes8), std::end(primes8), std::back_inserter(primes));
-        uint8_t wheel[] = {2, 4};
-        uint8_t i = 0;
-        for (uint64_t n = 257; n < (1 << 16); n += wheel[i], i ^= 1) {
-            auto isprime = true;
-            for (auto j = 1; j < primes8.size(); ++j) {
-                auto d = primes8[j];
-                if (!(n % d)) {
-                    isprime = false;
-                    break;
-                }
-                if ( d * d > n ) {
-                    break;
-                }
-            }
-            if (isprime) {
-                primes.push_back(n);
-            }
-        }
-        return primes;
-    }();
-
 uint32_t bitwidth(uint64_t t)
 {
     uint32_t c{};
@@ -403,138 +330,14 @@ uint32_t bitwidth(uint64_t t)
     return c;
 }
 
-uint64_t intsqrt(uint64_t n)
-{
-    if (n < 2) {
-        return n;
-    }
-    auto x0 = uint64_t(1) << (bitwidth(n) / 2 + 1);
-    for (auto x1 = (x0 + n / x0) / 2
-        ; x1 < x0
-        ; x0 = x1, x1 = (x0 + n / x0) / 2
-        ) {
-    }
-    return x0;
-}
-
-
-void sieve(std::vector<uint64_t> & primes, uint64_t n0, uint64_t n1)
-{
-    assert(n0 <= n1);
-    primes.clear();
-    if(n1 <= (1 << 16)) {
-        for(auto p : primes16) {
-            if(n0 <= p) {
-                if(p < n1) {
-                    primes.push_back(p);
-                } else {
-                    break;
-                }
-            }
-        }
-        return;
-    }
-    if (n1 <= (uint64_t(1) << 32)) {
-        if (n0 < (1 << 16)) {
-            auto it = std::lower_bound(std::begin(primes16), std::end(primes16), n0);
-            primes.reserve((n1 - (1 << 16) + 1) / 2 + std::distance(it, std::end(primes16)));
-            std::copy(it, std::end(primes16), std::back_inserter(primes));
-            n0 = 1 << 16;
-        } else {
-            primes.reserve((n1 - n0 + 1) / 2);
-        }
-        auto i0 = primes.size();
-        n0 = n0 + ((n0 ^ 1) & 1);
-        for (auto x = n0; x < n1; x += 2) {
-            primes.push_back(x);
-        }
-        if (primes.size() == i0) {
-            return;
-        }
-        /*parallel_for_each(4, std::begin(primes16) + 1, std::end(primes16), [&primes, n0, i0](uint64_t sp) {
-                    auto s = ((n0 + sp - 1) / sp) * sp;
-                    for(auto k = i0 + ((s & 1) ? (s - n0) / 2 : (s + sp - n0) / 2); k < primes.size(); k += sp) {
-                        primes[k] = 0;
-                    }
-              }
-            , [n1](uint64_t x) { return x * x >= n1; }
-            );*/
-        for (auto i = 1; i < primes16.size(); ++i) {
-            auto sp = primes16[i];
-            if( sp * sp >= n1 ) {
-                break;
-            }
-            auto s = ((n0 + sp - 1) / sp) * sp;
-            for(auto k = i0 + ((s & 1) ? (s - n0) / 2 : (s + sp - n0) / 2); k < primes.size(); k += sp) {
-                primes[k] = 0;
-            }
-        }
-        primes.erase(std::remove(std::begin(primes) + i0, std::end(primes), 0), std::end(primes));
-        return;
-    }
-    if (n0 < uint64_t(1) << 32) {
-        sieve(primes, n0, uint64_t(1) << 32);
-        n0 = uint64_t(1) << 32;
-    }
-    auto sieves = primes.size();
-    primes.reserve(sieves + (n1 - n0 + 1) / 2);
-    n0 = n0 + ((n0 ^ 1) & 1);
-    for (auto x = n0; x < n1; x += 2) {
-        primes.push_back(x);
-    }
-    if (primes.size() == sieves) {
-        return;
-    }
-    // Following loop can be parallelized, idea: construct vector of pairs v = [start, end)
-    // then std::for_each(std::par, v, []() { sieve });
-    // of course if doing so tmpPrimes can no longer be shared among iterations of the loop.
-    constexpr auto sieveRangeLength = uint64_t(1) << 21;
-    const auto upperBound = intsqrt(n1) + 1;
-    std::vector<uint64_t> tmpPrimes;
-    for ( auto ks = uint64_t(3)
-        ; ks < upperBound
-        ; ks += sieveRangeLength
-        ) {
-        auto ke = (std::min)(ks + sieveRangeLength, upperBound);
-        sieve(tmpPrimes, ks, ke);
-        for (auto p : tmpPrimes) {
-            auto i0 = sieves;
-            if (p * p >= n0) {
-                i0 += (p * p - n0) / 2;
-            } else {
-                auto s = ((n0 + p - 1) / p) * p;
-                i0 += (s & 1) ? (s - n0) / 2 : (s + p - n0) / 2;
-            }
-            for (auto i = i0; i < primes.size(); i += p) {
-                primes[i] = 0;
-            }
-        }
-    }
-    primes.erase(std::remove(std::begin(primes) + sieves, std::end(primes), 0), std::end(primes));
-}
-
-std::vector<uint64_t> sieve(uint64_t n0, uint64_t n1)
-{
-    std::vector<uint64_t> primes;
-    sieve(primes, n0, n1);
-    return primes;    
-}
-
-
 int autotest()
 {
+        auto sieve = [](auto n0, auto n1) -> auto {
+            std::vector<uint64_t> primes;
+            cutrialdive::sieve(n0, n1, primes);
+            return primes;
+        };
         std::cout << "Executing self tests..." << std::endl;
-        {
-            std::vector<std::pair<uint64_t,uint64_t>> tsqrt = { {0, 0}, {1, 1}, {2, 1}, {3, 1}, {4, 2}
-                , {17, 4}, {1024, 32}, {2047, 45}, {2048, 45}, {2115, 45}, {2116, 46}, {~uint64_t{}, 4294967295ull} };
-            for (auto const & t : tsqrt) {
-                auto sqrtt = intsqrt(t.first);
-                if(sqrtt != t.second) {
-                    std::cerr << "Failure: expected integer square root of " << t.first << " is " << t.second
-                      << ", actual: " << sqrtt << std::endl;
-                }
-            }
-        }
         {
             auto primes = sieve(256, 307);
             std::vector<uint64_t> expected = {257, 263, 269, 271, 277,
@@ -599,12 +402,6 @@ int autotest()
                 std::cerr << "Failure: expected number of primes in [1, 131072)" << std::endl;
                 std::cerr << "Expected: " << expectedCount << std::endl;
                 std::cerr << "  Actual: " << primes.size() << std::endl;
-            }
-            if (!std::equal(std::begin(primes8), std::end(primes8), std::begin(primes))) {
-                std::cerr << "Failure: " << std::endl;
-                std::cerr << "Expected: "; output_range(std::cerr, primes8); std::cerr << std::endl;
-                std::cerr << "  Actual: "; output_range(std::cerr, std::begin(primes)
-                                            , std::begin(primes) + primes8.size()); std::cerr << std::endl;
             }
         }
         {
@@ -768,10 +565,10 @@ int autotest()
 // number <- number / (f_1^e_1*f_2^e_2...f_n^e_n)
 // @param [in/out] number which was sent to the GPU for factorization
 // @return factors (with their exponent)
-std::vector<std::pair<uint64_t, uint32_t>> getFactors(HgInt & number)
+std::vector<std::pair<uint64_t, uint32_t>> getFactors(HgInt & number, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
     std::vector<std::pair<uint64_t, uint32_t>> factors;
-    auto const & rawFactors = getFactorsFromDevice();
+    auto const & rawFactors = getFactorsFromDevice(deviceFactorsCount, deviceFactors, deviceFactorsSize);
     for(auto const & f : rawFactors) {
         uint32_t e = 0;
         do {
@@ -786,17 +583,35 @@ std::vector<std::pair<uint64_t, uint32_t>> getFactors(HgInt & number)
 extern bool isPRP(HgInt number);
 
 
+void alloc_device_factors(int*& deviceFactorsCount, uint64_t *& deviceFactors, uint32_t deviceFactorsSize)
+{
+    cudaMalloc(&deviceFactorsCount, sizeof(*deviceFactorsCount));
+    cudaMemset(deviceFactorsCount, 0, sizeof(*deviceFactorsCount));
+    cudaMalloc(&deviceFactors, sizeof(*deviceFactors)*deviceFactorsSize);
+}
+
+void free_device_factors(int*& deviceFactorsCount, uint64_t *& deviceFactors)
+{
+    cudaFree(deviceFactorsCount);
+    cudaFree(deviceFactors);
+}
+
+
 int main(int argc, char** argv)
 {
     if ((argc == 2) && (std::string(argv[1]) == "-t")) {
         return autotest();
     }
     uint64_t ii = 0;
-    if ((argc == 3) && (std::string(argv[1]) == "-i")) {
+    bool haveToPrpTest{};
+    if ((argc >= 3) && (std::string(argv[1]) == "-i")) {
         std::istringstream istr{argv[2]};
         istr >> ii;
+        if(argc > 3 && !strcmp(argv[3], "--prp-test")) {
+            haveToPrpTest = true;
+        }
     } else {
-        std::cerr << "Usage: " << argv[0] << " -i <index>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " -i <index> [--prp-test]" << std::endl;
         return 1;
     }
     
@@ -817,19 +632,29 @@ int main(int argc, char** argv)
             std::cerr << "Error returned by cudaMalloc(): " << cudaGetErrorString(cuStatus) << std::endl;
         }
         cudaMemcpy(cn, n, nlen*sizeof(uint64_t), cudaMemcpyHostToDevice);
+        int * deviceFactorsCount = nullptr;
+        uint64_t * deviceFactors = nullptr;
+        uint32_t const deviceFactorsSize = 65536;
+        alloc_device_factors(deviceFactorsCount, deviceFactors, deviceFactorsSize);
 
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
         auto tfStart = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> sieve_time, tf_time;
     
         std::vector<uint64_t> primes;
+        primes.reserve(1ull << 22);
         uint64_t * devicePrimes{};
         auto primesSize = primes.size();
-        for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 21
+        for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 25
                 ; k1 <= (uint64_t(1) << 32)
-                ; k0 = k1, k1 += uint64_t(1) << 21
+                ; k0 = k1, k1 += uint64_t(1) << 25
             ) {
-            sieve(primes, k0, k1);
+            auto sieveStart = std::chrono::high_resolution_clock::now();
+            primes.clear();
+            cutrialdive::sieve(k0, k1, primes);
+            auto gpu_tf_start = std::chrono::high_resolution_clock::now();
+            sieve_time += gpu_tf_start - sieveStart;
 
             if (primes.size() > primesSize) {
                 if (devicePrimes) {
@@ -840,11 +665,11 @@ int main(int argc, char** argv)
             primesSize = primes.size();
             cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
             if (k1 <= 2642258) {
-                trial_div<3><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+                trial_div<3><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else if (k1 <= (1ull << 32)) {
-                trial_div<2><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+                trial_div<2><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else {
-                trial_div<1><<<32*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize);
+                trial_div<1><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
             }
             cuStatus = cudaDeviceSynchronize();
             if(cuStatus != cudaSuccess) {
@@ -857,6 +682,7 @@ int main(int argc, char** argv)
                         cudaGetErrorString(cuStatus) << std::endl;
                 }
             }
+            tf_time += std::chrono::high_resolution_clock::now() - gpu_tf_start;
         }
         if (devicePrimes) {
             cudaFree(devicePrimes);
@@ -864,7 +690,14 @@ int main(int argc, char** argv)
         cudaFree(cn);
         auto tfEnd = std::chrono::high_resolution_clock::now();
         
-        auto foundFactors = getFactors(sm671);
+        cuStatus = cudaDeviceSynchronize();
+        if(cuStatus != cudaSuccess) {
+           std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
+	    cudaGetErrorString(cuStatus) << std::endl;
+        }
+
+        auto foundFactors = getFactors(sm671, deviceFactorsCount, deviceFactors, deviceFactorsSize);
+        free_device_factors(deviceFactorsCount, deviceFactors);
         std::cout << "Found " << foundFactors.size() << " factor(s)";
         bool isFirst = true;
         for(auto const & f : foundFactors) {
@@ -880,19 +713,24 @@ int main(int argc, char** argv)
             isFirst = false;
         }
 
-        std::cout << " [Factoring... "
+        std::cout << std::endl << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 
-                        tfStart).count() / 1000 << "s]";
-        std::flush(std::cout);
-        auto prpStart = std::chrono::high_resolution_clock::now();
-        auto hasPrpCofactor = isPRP(sm671);
-        auto prpEnd = std::chrono::high_resolution_clock::now();
-        std::cout << " [Primality testing... "
-                << std::chrono::duration<double, std::milli>(prpEnd - 
-                        prpStart).count() / 1000 << "s]"
-                << std::endl;
-
-        std::cout << "Smarandache(" << ii << ") -> " << (hasPrpCofactor ? "PRP" : "C") << std::endl;
+                        tfStart).count() / 1000 << "s ("
+                   << "sieve: " << sieve_time.count() << "s, "
+                   << "TF on GPU: " << tf_time.count() << "s)]";
+        if(!haveToPrpTest) {
+            std::cout << std::endl;
+        } else {
+            std::cout << " [Primality testing... ";
+            std::flush(std::cout);
+            auto prpStart = std::chrono::high_resolution_clock::now();
+            auto hasPrpCofactor = isPRP(sm671);
+            auto prpEnd = std::chrono::high_resolution_clock::now();
+            std::cout << std::chrono::duration<double, std::milli>(prpEnd - 
+                            prpStart).count() / 1000 << "s]"
+                    << std::endl;
+            std::cout << "Smarandache(" << ii << ") -> " << (hasPrpCofactor ? "PRP" : "C") << std::endl;
+        }
         
     } catch (std::exception const & ex) {
         std::cerr << "Error: " << ex.what() << std::endl;

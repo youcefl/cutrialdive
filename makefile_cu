@@ -1,0 +1,43 @@
+# Youcef Lemsafer
+# 2021.12.23
+
+CC = gcc
+CXX = g++
+NVCC = nvcc
+
+GMP_DIR ?= /usr/local
+GWNUM_DIR ?= /usr/local/gwnum
+OUT_DIR ?= ./bin-cu
+
+PRIMESIEVE_INCLUDE_DIR ?= 
+SIEVER_FLAGS ?= -DCUTRIALDIVE_HAS_PRIMESIEVE -I$(PRIMESIEVE_INCLUDE_DIR)
+PRIMESIEVE_LIB_FLAGS ?= -L/usr/lib/x86_64-linux-gnu/ -lprimesieve
+
+CFLAGS = -fPIC -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+CXXFLAGS = -fPIC -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+NVCCFLAGS = -std=c++20 -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+
+
+OBJS = $(OUT_DIR)/gw_utility.o $(OUT_DIR)/cutrialdiv.o $(OUT_DIR)/prp.o
+
+all: $(OUT_DIR) $(OUT_DIR)/cutrialdive
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+$(OUT_DIR)/%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OUT_DIR)/%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(OUT_DIR)/%.o: %.cu
+	$(NVCC) $(NVCCFLAGS) -c -o $@ $<
+
+$(OUT_DIR)/cutrialdive: $(OBJS)
+	$(NVCC) -o $@ $^ $(PRIMESIEVE_LIB_FLAGS) -L$(GMP_DIR)/lib -L$(GWNUM_DIR) -l:gwnum.a -lgmp -ldl
+
+clean:
+	rm -f $(OUT_DIR)/cutrialdive
+	rm -f $(OBJS)
+

@@ -4,7 +4,7 @@
 */
 #pragma once
 
-//#include <cstdint>
+#include <cstdint>
 #include <string>
 #include <exception>
 #include <gmp.h>
@@ -33,6 +33,7 @@ public:
     HgInt(std::string const &);
     HgInt(char const*);
     HgInt(uint64_t);
+    bool operator!() const;
     HgInt & operator+=(HgInt const& x);
     HgInt & operator+=(uint64_t x);
     HgInt & operator-=(HgInt const& x);
@@ -47,9 +48,14 @@ public:
     std::size_t size() const;
     std::size_t sizeInBase(int base) const;
     friend HgInt pow(HgInt x, uint64_t y);
+    uint64_t mod(uint64_t x) const;
+    friend void div_mod(HgInt const & number, HgInt const & divisor, HgInt& quotient, HgInt& remainder);
+    friend HgInt mod(HgInt x, uint64_t y);
 private:
     mpz_t val_;
 };
+
+bool is_prp(HgInt number);
 
 #define HGINT_INLINE inline
 
@@ -136,6 +142,11 @@ HgInt::HgInt(char const* str)
         mpz_clear(val_);
         throw InvalidNumberException(str);
     }
+}
+
+HGINT_INLINE
+bool HgInt::operator!() const {
+    return mpz_sgn(val_) == 0;
 }
 
 HGINT_INLINE
@@ -239,3 +250,20 @@ HgInt pow(HgInt x, uint64_t y)
     return x;
 }
 
+HGINT_INLINE
+uint64_t HgInt::mod(uint64_t x) const
+{
+    return mpz_fdiv_ui(val_,  x);
+}
+
+HGINT_INLINE
+void div_mod(HgInt const& number, HgInt const& divisor, HgInt& quotient, HgInt& remainder)
+{
+    mpz_fdiv_qr(quotient.val_, remainder.val_, number.val_, divisor.val_);
+}
+
+HGINT_INLINE
+HgInt mod(HgInt x, uint64_t y)
+{
+    return HgInt{x.mod(y)};
+}
