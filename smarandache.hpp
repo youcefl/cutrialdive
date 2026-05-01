@@ -12,7 +12,7 @@
 
 #pragma once
 
-namespace smarandachization
+namespace cutrialdive
 {
     /// @brief Returns Sm(n) = 1234567...n
     /// @tparam NumberT number type
@@ -98,7 +98,7 @@ namespace smarandachization
 }
 
 
-namespace smarandachization {
+namespace cutrialdive {
 
     namespace details {
         template <typename T>

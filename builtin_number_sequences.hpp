@@ -45,7 +45,7 @@ namespace cutrialdive {
             shift = 10'000'000;
         }
 
-        return ((__uint128_t(v_n_mod_p) * shift) + m) * mu_p) >> 64;
+        return (((__uint128_t(v_n_mod_p) * shift) + m) * mu_p) >> 64;
     }
 
 }

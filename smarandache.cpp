@@ -16,10 +16,8 @@
 #include "timer.hpp"
 
 
-namespace smarandachization
+namespace cutrialdive
 {
-    using cutrialdive::sieve;
-
     ///
     std::ostream &output_smarandache(std::ostream &out, uint64_t n)
     {
@@ -55,10 +53,6 @@ namespace smarandachization
           , [](auto x) { return std::string{"(("} + c5 + ")*10^(5*(" + x + "-9999))"
                                               "-12321*1234321*(99999*" + x + "+100000))"
                                             "/(12321*1234321*99999^2)"; }
-
-            // , [&](auto x) { return (c5 * pow(T{10}, 5*(x - 9999)) 
-            //                             - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
-            //                         / (T{12321} * T{1234321} * T{99999} * T{99999}); }
         };
         if(log10n < sm.size()) {
             return out << sm[log10n](std::to_string(n));

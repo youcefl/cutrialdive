@@ -21,7 +21,8 @@ NVCCFLAGS = -std=c++20 -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
 OBJS = $(OUT_DIR)/gw_utility.o \
        $(OUT_DIR)/cutrialdiv.o \
 	   $(OUT_DIR)/prp.o \
-	   $(OUT_DIR)/reciprocal.o
+	   $(OUT_DIR)/modular_arithmetic_detail.o \
+	   $(OUT_DIR)/autotests.o
 
 all: $(OUT_DIR) $(OUT_DIR)/cutrialdive
 

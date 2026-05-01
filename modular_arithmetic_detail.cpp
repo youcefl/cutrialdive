@@ -2,7 +2,7 @@
 * Created on 2026.04.30
 * Copyright Youcef Lemsafer
 */
-#include "reciprocal.hpp"
+#include "modular_arithmetic_detail.hpp"
 
 #include <iostream>
 #include <omp.h>
