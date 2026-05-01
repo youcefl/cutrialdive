@@ -13,9 +13,11 @@
 #include <vector>
 #include <thread>
 #include <functional>
+#include <omp.h>
 
 #include "hgint.hpp"
 #include "siever.hpp"
+#include "reciprocal.hpp"
 
 
 template <typename It>
@@ -70,16 +72,136 @@ auto smarandache(uint64_t n)
     }
 }
 
-
-// Returns normalized d i.e. d*2^k such that 2^63 <= d*2^k < 2^64
-__device__
-uint64_t normalize(uint64_t d)
+template <typename PtrT>
+void free_device_ptr(PtrT *& ptr)
 {
-    // CUDA-specific __nv_clzll returns number of consecutive leading zero bits,
-    // starting at most significant bit.
-    return d << __clzll(d);
+    if(!ptr) {
+        return;
+    }
+    cudaFree(ptr);
+    ptr = nullptr;
 }
 
+template <typename PtrT>
+PtrT* alloc_device_ptr(uint64_t size)
+{
+    PtrT * ptr = nullptr;
+    cudaMalloc(&ptr, sizeof(*ptr) * size);
+    return ptr;
+}
+
+
+template <typename PrimeT>
+class prime_data
+{
+public:
+    uint64_t size() const;
+    void reserve(size_t capacity);
+    std::vector<PrimeT> const & reciprocals() const;
+    std::vector<PrimeT> & reciprocals();
+private:
+    std::vector<PrimeT> reciprocals_;
+};
+template <typename PrimeT>
+inline
+uint64_t prime_data<PrimeT>::size() const
+{
+    return reciprocals_.size();
+}
+template <typename PrimeT>
+inline
+void prime_data<PrimeT>::reserve(std::size_t capacity)
+{
+    reciprocals_.reserve(capacity);
+}
+template <typename PrimeT>
+inline
+std::vector<PrimeT> const & prime_data<PrimeT>::reciprocals() const
+{
+    return reciprocals_;
+}
+template <typename PrimeT>
+inline
+std::vector<PrimeT> & prime_data<PrimeT>::reciprocals()
+{
+    return reciprocals_;
+}
+
+template <typename PrimeT>
+inline void compute_prime_data(std::vector<PrimeT> const & primes, prime_data<PrimeT> & data)
+{
+    cutrialdive::compute_reciprocals(primes, data.reciprocals());
+}
+
+template <typename PrimeT>
+class device_prime_data {
+public:
+    struct data {
+        PrimeT * primes;
+        PrimeT * reciprocals;
+        uint64_t primes_count;
+    };
+    device_prime_data() = default;
+    device_prime_data(device_prime_data&&) = default;
+    device_prime_data(device_prime_data const &) = delete;
+    device_prime_data& operator=(device_prime_data const &) = delete;
+
+    data const & get_data() const;
+    uint64_t size() const;
+    void resize(uint64_t newSize);
+    void copy_from_host(
+            std::vector<PrimeT> const & primes,
+            prime_data<PrimeT> const & data
+        );
+private:
+    data data_{};
+};
+
+template <typename PrimeT>
+inline
+typename device_prime_data<PrimeT>::data const & device_prime_data<PrimeT>::get_data() const
+{
+    return data_;   
+}
+
+
+template <typename PrimeT>
+inline uint64_t device_prime_data<PrimeT>::size() const
+{
+//    std::cout << "Size of device_prime_data instance: " << data_.primes_count << std::endl;
+    return data_.primes_count;
+}
+
+template <typename PrimeT>
+inline void device_prime_data<PrimeT>::resize(uint64_t newSize)
+{
+//    std::cout << "Resizing data in device_prime_data instance: {" 
+//        << data_.primes << ", " << data_.normalized
+//        << ", " << data_.reciprocals << "}" << std::endl;
+    free_device_ptr(data_.primes);
+    free_device_ptr(data_.reciprocals);
+    data_.primes_count = newSize;
+    data_.primes = alloc_device_ptr<PrimeT>(data_.primes_count);
+    data_.reciprocals = alloc_device_ptr<PrimeT>(data_.primes_count);
+}
+
+template <typename PrimeT>
+inline void device_prime_data<PrimeT>::copy_from_host(
+    std::vector<PrimeT> const & primes,
+    prime_data<PrimeT> const & data
+    )
+{
+    assert(primes.size() == data.size());
+    auto const primes_size = primes.size();
+    if(primes_size > size()) {
+        resize(primes_size);
+    }
+    if(!size()) {
+        return;
+    }
+    cudaMemcpy(data_.primes, &primes[0], sizeof(*&primes[0]) * primes_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(data_.reciprocals, &data.reciprocals()[0], sizeof(*&data.reciprocals()[0]) * primes_size, cudaMemcpyHostToDevice);
+}
 
 // Returns (u1 * 2^64 + u0) mod d
 // Assumes u1 < d, 2^63 <= d < 2^64 and rnd is the reciprocal of d
@@ -105,48 +227,6 @@ uint64_t mod2by1(uint64_t u1, uint64_t u0, uint64_t d, uint64_t rnd)
 }
 
 
-// Used inside reciprocal(uint64_t) (and only there).
-__device__
-uint_fast32_t inner_reciprocal(uint32_t & a2, uint32_t & a1, uint32_t & a0, uint64_t d)
-{
-    auto q = ((uint64_t(a2) << 32) | a1) / (d >> 32);
-    if (q > 0xffffffff)
-        q = 0xffffffff;
-    uint64_t qdl = q * d;
-    uint64_t qdh = __umul64hi(q, d);
-    while ((qdh > a2) || ((qdh == a2) && (qdl > ((uint64_t(a1) << 32) | a0))))  {
-        --q;
-        if (qdl < d) {
-            --qdh;
-        }
-        qdl -= d;
-    }
-    if (a0 < (qdl & 0xffffffff)) {
-        --a1;
-    }
-    a0 -= qdl & 0xffffffff;
-    if (a1 < (qdl >> 32)) {
-        --a2;
-    }
-    a1 -= qdl >> 32;
-    a2 -= qdh;
-    return q;        
-}
-
-
-// Returns floor((B^2 - 1) / d) - B = floor(((B - 1 - d) * B + B - 1) / d) where B = 2^64
-// Assumes 2^63 <= d < 2^64 i.e. most significant bit of d must be set
-__device__
-uint64_t reciprocal(uint64_t d)
-{
-    // <B-1-d, B-1> / d
-    auto a = ~uint64_t{} - d;
-    uint32_t a3 = a >> 32, a2 = a & 0xffffffff;
-    uint32_t a1 = 0xffffffff, a0 = a1;
-    auto q1 = inner_reciprocal(a3, a2, a1, d);
-    auto q0 = inner_reciprocal(a2, a1, a0, d);
-    return (uint64_t(q1) << 32) | q0;
-}
 
 // Computes N % d where N = <n[nlen-1], ..., n[1], n[0]>
 //  = n[0] + 2^64*n[1] + ... + 2^(64*(nlen-1))*n[nlen-1]
@@ -154,8 +234,21 @@ __device__
 uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d)
 {
     uint64_t r = 0;
-    auto nd = normalize(d);
-    auto rnd = reciprocal(normalize(d));
+    auto nd = cutrialdive::normalize(d);
+    auto rnd = cutrialdive::reciprocal(nd);
+    for(auto j = nlen - 1; ; --j) {
+        r = mod2by1(r, n[j], nd, rnd);
+        if(!j) {
+            break;
+        }
+    }
+    return r % d;
+}
+__device__
+uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d, uint64_t rnd)
+{
+    uint64_t r = 0;
+    auto nd = cutrialdive::normalize(d);
     for(auto j = nlen - 1; ; --j) {
         r = mod2by1(r, n[j], nd, rnd);
         if(!j) {
@@ -173,6 +266,8 @@ uint64_t modnby1(uint64_t (&n) [N], uint64_t d)
 }
 
 
+
+
 __device__
 void pushFactor(uint64_t ff, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
@@ -183,29 +278,38 @@ void pushFactor(uint64_t ff, int* deviceFactorsCount, uint64_t * deviceFactors, 
 //    __syncthreads();
 }
 
-template <uint8_t BatchSize>
+template <uint8_t BatchSize, typename PrimeT>
 __global__
-void trial_div(uint64_t * n, uint64_t nlen, uint64_t * p, size_t plen, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
+void trial_div(uint64_t * n, uint64_t nlen, typename device_prime_data<PrimeT>::data primeData, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
+    static_assert(BatchSize > 0);
     int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
     int stride = blockDim.x * gridDim.x * BatchSize;
 
+    auto p = primeData.primes;
+    auto plen = primeData.primes_count;
     for(size_t i = index; i < plen; i += stride) {
-        uint64_t pp = p[i];
-        for(auto j = 1; j < BatchSize; ++j) {
-            if (i + j >= plen) {
-                break;
+        if constexpr (BatchSize == 1) {
+            if(!modnby1(n, nlen, p[i], primeData.reciprocals[i])) {
+                pushFactor(p[i], deviceFactorsCount, deviceFactors, deviceFactorsSize);
             }
-            pp *= p[i + j];
-        }
-        auto mod = modnby1(n, nlen, pp);
-        for (auto j = 0; j < BatchSize; ++j) {
-            if (i + j >= plen) {
-                break;
+        } else {
+            uint64_t pp = p[i];
+            for(auto j = 1; j < BatchSize; ++j) {
+                if (i + j >= plen) {
+                    break;
+                }
+                pp *= p[i + j];
             }
-            if (! (mod % p[i + j]) ) {
-//    printf("Adding factor %llu\n", p[i+j]);
-                pushFactor(p[i + j], deviceFactorsCount, deviceFactors, deviceFactorsSize);
+            auto mod = modnby1(n, nlen, pp);
+            for (auto j = 0; j < BatchSize; ++j) {
+                if (i + j >= plen) {
+                    break;
+                }
+                if (! (mod % p[i + j]) ) {
+    //    printf("Adding factor %llu\n", p[i+j]);
+                    pushFactor(p[i + j], deviceFactorsCount, deviceFactors, deviceFactorsSize);
+                }
             }
         }
     }
@@ -248,7 +352,7 @@ void treciprocal()
     for (auto i = 0; i < testcaseSize; ++i) {
         auto const & t = tvec[i];
         auto expect = t.expected;
-        auto actual = reciprocal(t.input);
+        auto actual = cutrialdive::reciprocal(t.input);
         if (expect != actual) {
             printf("FAIL -> reciprocal(%" PRIu64 ")\n", t.input); 
             printf("    expected: %" PRIu64 " | <low = %u, high = %u>\n", expect, uint32_t(expect & 0xffffffff), uint32_t(expect >> 32));
@@ -321,14 +425,6 @@ void tmodnby1()
 }
 
 
-uint32_t bitwidth(uint64_t t)
-{
-    uint32_t c{};
-    while (t >>= 1) {
-        ++c;
-    }
-    return c;
-}
 
 int autotest()
 {
@@ -597,6 +693,17 @@ void free_device_factors(int*& deviceFactorsCount, uint64_t *& deviceFactors)
 }
 
 
+auto device_synchronize()
+{
+    auto cuStatus = cudaDeviceSynchronize();
+    if(cuStatus != cudaSuccess) {
+        std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
+            cudaGetErrorString(cuStatus) << std::endl;
+    }
+    return cuStatus;
+}
+
+
 int main(int argc, char** argv)
 {
     if ((argc == 2) && (std::string(argv[1]) == "-t")) {
@@ -615,6 +722,7 @@ int main(int argc, char** argv)
         return 1;
     }
     
+    std::cout << "Using up to " << omp_get_max_threads() << " thread(s) on the CPU" << std::endl;
 
     try {
         auto sm671 = smarandache<HgInt>(ii);
@@ -626,6 +734,9 @@ int main(int argc, char** argv)
             << "..." << n[0] <<  ", length = " << std::dec << nlen << " 64-bit words, "
             <<  sizeInBase10 << " digits" << std::endl;
 
+        constexpr auto sieveUpperBoundShift = 34;
+        constexpr auto sieveUpperBound = uint64_t{1} << sieveUpperBoundShift;
+        std::cout << "Trial factoring to 2^" << sieveUpperBoundShift << std::endl;
         uint64_t * cn;
         auto cuStatus = cudaMalloc(&cn, nlen*sizeof(uint64_t));
         if(cuStatus != cudaSuccess) {
@@ -637,64 +748,53 @@ int main(int argc, char** argv)
         uint32_t const deviceFactorsSize = 65536;
         alloc_device_factors(deviceFactorsCount, deviceFactors, deviceFactorsSize);
 
+
+
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
         auto tfStart = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> sieve_time, tf_time;
+        std::chrono::duration<double> sieve_time, computeDataTime, copyPrimeDataToHostTime;
     
         std::vector<uint64_t> primes;
         primes.reserve(1ull << 22);
-        uint64_t * devicePrimes{};
-        auto primesSize = primes.size();
-        for (auto k0 = uint64_t(2), k1 = uint64_t(1) << 25
-                ; k1 <= (uint64_t(1) << 32)
-                ; k0 = k1, k1 += uint64_t(1) << 25
+        prime_data<uint64_t> primeData;
+        primeData.reserve(1ull << 22);
+        device_prime_data<uint64_t> devicePrimeData;
+
+        for (auto k0 = uint64_t{2}, k1 = uint64_t{1} << 25
+                ; k1 <= sieveUpperBound
+                ; k0 = k1, k1 += uint64_t{1} << 25
             ) {
             auto sieveStart = std::chrono::high_resolution_clock::now();
             primes.clear();
             cutrialdive::sieve(k0, k1, primes);
-            auto gpu_tf_start = std::chrono::high_resolution_clock::now();
-            sieve_time += gpu_tf_start - sieveStart;
+            sieve_time += std::chrono::high_resolution_clock::now() - sieveStart;
 
-            if (primes.size() > primesSize) {
-                if (devicePrimes) {
-                    cudaFree(devicePrimes);
-                }
-                cudaMalloc(&devicePrimes, primes.size() * sizeof(primes[0]));
-            }
-            primesSize = primes.size();
-            cuStatus = cudaMemcpy(devicePrimes, &primes[0], primesSize * sizeof(primes[0]), cudaMemcpyHostToDevice);
+            auto computeDataStart = std::chrono::high_resolution_clock::now();
+            compute_prime_data(primes, primeData);
+            computeDataTime += std::chrono::high_resolution_clock::now() - computeDataStart;
+
+            device_synchronize();
+
+            auto copyPrimeDataToHostStart = std::chrono::high_resolution_clock::now();
+            devicePrimeData.copy_from_host(primes, primeData);
+            copyPrimeDataToHostTime += std::chrono::high_resolution_clock::now() - copyPrimeDataToHostStart;
+            
             if (k1 <= 2642258) {
-                trial_div<3><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
+                trial_div<3, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else if (k1 <= (1ull << 32)) {
-                trial_div<2><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
+                trial_div<2, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else {
-                trial_div<1><<<256*numSMs, 256>>>(cn, nlen, devicePrimes, primesSize, deviceFactorsCount, deviceFactors, deviceFactorsSize);
+                trial_div<1, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
             }
-            cuStatus = cudaDeviceSynchronize();
-            if(cuStatus != cudaSuccess) {
-                std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
-                    cudaGetErrorString(cuStatus) << std::endl;
-                int devCount = 0;
-                cuStatus = cudaGetDeviceCount(&devCount);
-                if(cuStatus != cudaSuccess) {
-                    std::cerr << "Error returned by cudaGetDeviceCount(int*): " <<
-                        cudaGetErrorString(cuStatus) << std::endl;
-                }
-            }
-            tf_time += std::chrono::high_resolution_clock::now() - gpu_tf_start;
         }
-        if (devicePrimes) {
-            cudaFree(devicePrimes);
-        }
-        cudaFree(cn);
+        device_synchronize();
+
         auto tfEnd = std::chrono::high_resolution_clock::now();
         
-        cuStatus = cudaDeviceSynchronize();
-        if(cuStatus != cudaSuccess) {
-           std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
-	    cudaGetErrorString(cuStatus) << std::endl;
-        }
+
+        std::cout << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
+        std::cout << "Copying prime data to device took " << copyPrimeDataToHostTime.count() << "s (cumulated time)" << std::endl;
 
         auto foundFactors = getFactors(sm671, deviceFactorsCount, deviceFactors, deviceFactorsSize);
         free_device_factors(deviceFactorsCount, deviceFactors);
@@ -716,8 +816,7 @@ int main(int argc, char** argv)
         std::cout << std::endl << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 
                         tfStart).count() / 1000 << "s ("
-                   << "sieve: " << sieve_time.count() << "s, "
-                   << "TF on GPU: " << tf_time.count() << "s)]";
+                   << "sieve: " << sieve_time.count() << "s)]";
         if(!haveToPrpTest) {
             std::cout << std::endl;
         } else {

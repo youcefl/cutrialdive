@@ -21,25 +21,30 @@
 
 namespace smd = smarandachization;
 
-void output_usage(std::ostream & out)
+void output_help(std::ostream & out)
 {
-    out << R"-(Usage:
-  smarandachization (-p n
+    out << R"-(
+  cutrialdive --mode <MODE> (-p n
                     | --print-expression n 
                     | -s n0 -e n1 --tf-start f0 --tf-end f1
                             [--output <output_path>]
                     | --single-prp n --factors "f_1, ..., f_m"
                     )
 
-  Sm(n) = 123....n (concatenation of the first n integers)
+    Mode selection
+    --------------
+    --mode <MODE>
+            Select a mode, possible values of <MODE> are: smarandache,
+            mersenne.
 
-    Print Sm(n)
-    -----------
+    Print number
+    ------------
     -p n
-            print Sm(n)
+            prints F(n) in base 10
 
     --print-expression n
-            prints an expression whose evaluation yields Sm(n)
+            prints an expression whose evaluation yields F(n). For example
+            "--mode mersenne --print-expression 7" will output 2^7-1.
 
 
     Trial factoring
@@ -47,10 +52,10 @@ void output_usage(std::ostream & out)
     Use options -s and -e to specify the range of indices [n0, n1[:
 
     -s n0
-            Processing will start at Sm(n0)
+            Processing will start at F(n0)
     -e n1
-            Processing will end at Sm(k) where is the largest integer
-            such that n0 <= k < n1
+            Processing will end at F(k) where k is the largest integer such
+            that n0 <= k < n1.
   
     Use options --tf-start --tf-end to specify the range containing
     the prime numbers to consider:
@@ -67,13 +72,13 @@ void output_usage(std::ostream & out)
     PRP test
     --------
     --single-prp n
-            Perform a PRP test on the cofactor of Sm(n).
+            Perform a PRP test on the cofactor of F(n).
 
     If --factors is provided, the factors are divided out before the test.
-    Otherwise, the test is performed on Sm(n) itself.
+    Otherwise, the test is performed on F(n) itself.
 
     --factors "f1, f2, ..., fm"
-            A comma-separated list of known factors of Sm(n).
+            A comma-separated list of known factors of F(n).
 
             Each factor can be expressed as:
             - A simple prime: "p"
@@ -84,7 +89,7 @@ void output_usage(std::ostream & out)
 
     --boost-factors
             When enabled, for each factor p, the program automatically
-            determines the largest exponent e such that p^e divides Sm(n).
+            determines the largest exponent e such that p^e divides F(n).
             This ensures that the cofactor used for the PRP test is not
             divisible by any of the given primes.
 
@@ -156,15 +161,28 @@ std::vector<smd::factor<uint64_t>> parse_factors(std::string const & factors_str
 int main(int argc, char** argv)
 {
     try {
-        if(argc <= 2) {
-            output_usage(std::cout);
+        if(argc == 2) {
+            if(!strcmp(argv[1], "-h")||!strcmp(argv[1], "--help")) {
+                output_help(std::cout);
+                return 0;
+            }
+        }
+        if(argc <= 4) {
+            std::cerr << "Usage:" << std::endl;
+            output_help(std::cerr);
             return 1;
+        }
+        auto ppargv = argv + 1;
+        std::string modeAsStr;
+        if(!eat_valued_option<std::string>("--mode", ppargv, [&modeAsStr](auto mode) { modeAsStr = mode; })) {
+           std::cerr << "Invalid command line, option --mode must come first" << std::endl;
+           return 1;
         }
         bool haveStart{}, haveEnd{}, haveTfStart{}, haveTfEnd{}, haveOutputPath;
         uint64_t startIndex{}, endIndex{},
                 tfStart{}, tfEnd{};
         std::string output_path;
-        for(auto ppargv = argv + 1; *ppargv; ++ppargv) {
+        for(; *ppargv; ++ppargv) {
             if(eat_valued_option<uint64_t>("-p", ppargv, [](auto index) {
                 smd::output_smarandache(std::cout, index) << std::endl;
             })) {
