@@ -4,6 +4,7 @@ CXX ?= g++
 CC ?= gcc
 
 OUT_DIR ?= ./bin
+SRC_DIR ?= ./src
 
 GMP_DIR ?= /usr/local
 GMP_INCLUDE_DIR ?= $(GMP_DIR)/include
@@ -24,19 +25,20 @@ LIB_FLAGS_TO_ADD ?=
 LIB_FLAGS ?= $(PRIMESIEVE_LIB_FLAGS) $(GMP_LIB_FLAGS) $(LIB_FLAGS_TO_ADD) $(GWNUM_LIB_FLAGS)
 
 
-OBJS = $(OUT_DIR)/smarandache.o $(OUT_DIR)/gw_utility.o \
+OBJS = $(OUT_DIR)/smarandache.o \
+       $(OUT_DIR)/gw_utility.o \
        $(OUT_DIR)/prp.o \
 	   $(OUT_DIR)/timer.o
 
 all: $(OUT_DIR)/cutrialdive
 
-$(OUT_DIR)/gw_utility.o: gw_utility.c gw_utility.h
+$(OUT_DIR)/gw_utility.o: $(SRC_DIR)/gw_utility.c $(SRC_DIR)/gw_utility.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(OUT_DIR)/%.o: %.cpp
+$(OUT_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-$(OUT_DIR)/cutrialdive: $(OBJS) main.cpp
+$(OUT_DIR)/cutrialdive: $(OBJS) $(SRC_DIR)/main.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LIB_FLAGS)
 
 clean:
