@@ -5,17 +5,22 @@ CC = gcc
 CXX = g++
 NVCC = nvcc
 
-GMP_DIR ?= /usr/local
-GWNUM_DIR ?= /usr/local/gwnum
 OUT_DIR ?= ./bin-cu
 
-PRIMESIEVE_INCLUDE_DIR ?= 
+GMP_DIR ?= /usr/local
+GMP_INCLUDE_DIR ?= $(GMP_DIR)/include
+GMP_LIB_DIR ?= $(GMP_DIR)/lib
+GWNUM_DIR ?= /usr/local/gwnum
+
+PRIMESIEVE_INCLUDE_DIR ?= /usr/local/include/primesieve
 SIEVER_FLAGS ?= -DCUTRIALDIVE_HAS_PRIMESIEVE -I$(PRIMESIEVE_INCLUDE_DIR)
 PRIMESIEVE_LIB_FLAGS ?= -L/usr/lib/x86_64-linux-gnu/ -lprimesieve
 
-CFLAGS = -fopenmp -fPIC -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
-CXXFLAGS = -fopenmp -fPIC -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
-NVCCFLAGS = -std=c++20 -O3 -I$(GMP_DIR)/include -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+OFLAG ?= -O3
+
+CFLAGS = -fopenmp -fPIC $(OFLAG) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+CXXFLAGS = -fopenmp -fPIC $(OFLAG) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+NVCCFLAGS = -std=c++20 $(OFLAG) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
 
 
 OBJS = $(OUT_DIR)/gw_utility.o \
@@ -39,7 +44,7 @@ $(OUT_DIR)/%.o: %.cu
 	$(NVCC) $(NVCCFLAGS) -c -o $@ $<
 
 $(OUT_DIR)/cutrialdive: $(OBJS)
-	$(NVCC) -o $@ $^ -Xcompiler "-fopenmp -O3 -march=native -mtune=native" $(PRIMESIEVE_LIB_FLAGS) -L$(GMP_DIR)/lib -L$(GWNUM_DIR) -l:gwnum.a -lgmp -ldl
+	$(NVCC) -o $@ $^ -Xcompiler "-fopenmp -O3 -march=native -mtune=native" $(PRIMESIEVE_LIB_FLAGS) -L$(GMP_LIB_DIR) -L$(GWNUM_DIR) -l:gwnum.a -lgmp -ldl
 
 clean:
 	rm -f $(OUT_DIR)/cutrialdive

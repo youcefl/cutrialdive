@@ -42,9 +42,35 @@ PtrT* alloc_device_ptr(uint64_t size)
     return ptr;
 }
 
+enum class PrecomputeReciprocals {
+    no, yes
+};
+
+template <typename PrimeT, PrecomputeReciprocals havePrecomputedReciprocals>
+class prime_data;
 
 template <typename PrimeT>
-class prime_data
+class prime_data<PrimeT, PrecomputeReciprocals::no>
+{
+public:
+    uint64_t size() const;
+    void reserve(size_t capacity);
+};
+template <typename PrimeT>
+inline
+uint64_t prime_data<PrimeT, PrecomputeReciprocals::no>::size() const
+{
+    return 0;
+}
+template <typename PrimeT>
+inline
+void prime_data<PrimeT, PrecomputeReciprocals::no>::reserve(std::size_t )
+{
+}
+
+
+template <typename PrimeT>
+class prime_data<PrimeT, PrecomputeReciprocals::yes>
 {
 public:
     uint64_t size() const;
@@ -56,118 +82,222 @@ private:
 };
 template <typename PrimeT>
 inline
-uint64_t prime_data<PrimeT>::size() const
+uint64_t prime_data<PrimeT, PrecomputeReciprocals::yes>::size() const
 {
     return reciprocals_.size();
 }
 template <typename PrimeT>
 inline
-void prime_data<PrimeT>::reserve(std::size_t capacity)
+void prime_data<PrimeT, PrecomputeReciprocals::yes>::reserve(std::size_t capacity)
 {
     reciprocals_.reserve(capacity);
 }
 template <typename PrimeT>
 inline
-std::vector<PrimeT> const & prime_data<PrimeT>::reciprocals() const
+std::vector<PrimeT> const & prime_data<PrimeT, PrecomputeReciprocals::yes>::reciprocals() const
 {
     return reciprocals_;
 }
 template <typename PrimeT>
 inline
-std::vector<PrimeT> & prime_data<PrimeT>::reciprocals()
+std::vector<PrimeT> & prime_data<PrimeT, PrecomputeReciprocals::yes>::reciprocals()
 {
     return reciprocals_;
 }
 
-template <typename PrimeT>
-inline void compute_prime_data(std::vector<PrimeT> const & primes, prime_data<PrimeT> & data)
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+inline void compute_prime_data(std::vector<PrimeT> const & primes, prime_data<PrimeT, precomputeReciprocals> & data)
 {
-    cutrialdive::compute_reciprocals(primes, data.reciprocals());
+    if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+        cutrialdive::compute_reciprocals(primes, data.reciprocals());
+    }
 }
 
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+struct data_impl;
 template <typename PrimeT>
+struct data_impl<PrimeT, PrecomputeReciprocals::yes> {
+    PrimeT * primes;
+    PrimeT * reciprocals;
+    uint64_t primes_count;
+};
+template <typename PrimeT>
+struct data_impl<PrimeT, PrecomputeReciprocals::no> {
+    PrimeT * primes;
+    uint64_t primes_count;
+};
+
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
 class device_prime_data {
 public:
-    struct data {
-        PrimeT * primes;
-        PrimeT * reciprocals;
-        uint64_t primes_count;
-    };
     device_prime_data() = default;
     device_prime_data(device_prime_data&&) = default;
     device_prime_data(device_prime_data const &) = delete;
     device_prime_data& operator=(device_prime_data const &) = delete;
 
-    data const & get_data() const;
+    data_impl<PrimeT, precomputeReciprocals> const & get_data() const;
     uint64_t size() const;
     void resize(uint64_t newSize);
     void copy_from_host(
             std::vector<PrimeT> const & primes,
-            prime_data<PrimeT> const & data
+            prime_data<PrimeT, precomputeReciprocals> const & data
         );
 private:
-    data data_{};
+    data_impl<PrimeT, precomputeReciprocals> data_{};
 };
 
-template <typename PrimeT>
+
+
+
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
 inline
-typename device_prime_data<PrimeT>::data const & device_prime_data<PrimeT>::get_data() const
+data_impl<PrimeT, precomputeReciprocals> const & device_prime_data<PrimeT, precomputeReciprocals>::get_data() const
 {
     return data_;   
 }
 
 
-template <typename PrimeT>
-inline uint64_t device_prime_data<PrimeT>::size() const
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+inline uint64_t device_prime_data<PrimeT, precomputeReciprocals>::size() const
 {
 //    std::cout << "Size of device_prime_data instance: " << data_.primes_count << std::endl;
     return data_.primes_count;
 }
 
-template <typename PrimeT>
-inline void device_prime_data<PrimeT>::resize(uint64_t newSize)
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+inline void device_prime_data<PrimeT, precomputeReciprocals>::resize(uint64_t newSize)
 {
 //    std::cout << "Resizing data in device_prime_data instance: {" 
 //        << data_.primes << ", " << data_.normalized
 //        << ", " << data_.reciprocals << "}" << std::endl;
-    free_device_ptr(data_.primes);
-    free_device_ptr(data_.reciprocals);
+    if(newSize <= data_.primes_count) {
+        data_.primes_count = newSize;
+        return;
+    }
     data_.primes_count = newSize;
+    free_device_ptr(data_.primes);
     data_.primes = alloc_device_ptr<PrimeT>(data_.primes_count);
-    data_.reciprocals = alloc_device_ptr<PrimeT>(data_.primes_count);
+    if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+        free_device_ptr(data_.reciprocals);
+        data_.reciprocals = alloc_device_ptr<PrimeT>(data_.primes_count);
+    }
 }
 
-template <typename PrimeT>
-inline void device_prime_data<PrimeT>::copy_from_host(
+template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+inline void device_prime_data<PrimeT, precomputeReciprocals>::copy_from_host(
     std::vector<PrimeT> const & primes,
-    prime_data<PrimeT> const & data
+    prime_data<PrimeT, precomputeReciprocals> const & data
     )
 {
-    assert(primes.size() == data.size());
-    auto const primes_size = primes.size();
-    if(primes_size > size()) {
-        resize(primes_size);
+    if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+        // Must have same number of primes and additional data
+        // (because there must be a one to one correspondance between
+        // i-th prime and associated data)
+        assert(primes.size() == data.size());
     }
+    auto const primes_size = primes.size();
+    resize(primes_size);
     if(!size()) {
         return;
     }
     cudaMemcpy(data_.primes, &primes[0], sizeof(*&primes[0]) * primes_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(data_.reciprocals, &data.reciprocals()[0], sizeof(*&data.reciprocals()[0]) * primes_size, cudaMemcpyHostToDevice);
+    if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+        cudaMemcpy(data_.reciprocals, &data.reciprocals()[0],
+                sizeof(*&data.reciprocals()[0]) * data.reciprocals().size(),
+                cudaMemcpyHostToDevice
+            );
+    }
 }
+
+template <typename ValueT>
+class device_vector
+{
+public:
+    device_vector() = default;
+    device_vector(device_vector&&) = default;
+    device_vector(device_vector const &) = delete;
+    device_vector& operator=(device_vector const &) = delete;
+    ~device_vector();
+
+    ValueT * data();
+    /// Returns allocated size
+    uint64_t size() const;
+    /// Resize to @param newSize (does not reallocate if newSize <= size())
+    void resize(uint64_t newSize);
+    /// Resize to @param size and fill with zeroes
+    void assign_zero(uint64_t size);
+private:
+    ValueT * values_{};
+    uint64_t size_{};
+};
+
+template <typename ValueT>
+inline
+device_vector<ValueT>::~device_vector()
+{
+    if(values_) {
+        free_device_ptr(values_);
+        values_ = nullptr;
+    }
+    size_ = 0;
+}
+
+template <typename ValueT>
+inline
+ValueT * device_vector<ValueT>::data()
+{
+    return values_;
+}
+
+template <typename ValueT>
+inline
+uint64_t device_vector<ValueT>::size() const
+{
+    return size_;
+}
+
+template <typename ValueT>
+inline
+void device_vector<ValueT>::resize(uint64_t newSize)
+{
+    if(newSize > size_) {
+        free_device_ptr(values_);
+        values_ = alloc_device_ptr<ValueT>(newSize);
+    }
+    size_ = newSize;
+}
+
+template <typename ValueT>
+inline
+void device_vector<ValueT>::assign_zero(uint64_t size)
+{
+    resize(size);
+    cudaMemset(values_, 0, sizeof(*values_) * size_);
+}
+
 
 __device__
 void pushFactor(uint64_t ff, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
-//    __syncthreads();
+    if(*deviceFactorsCount == deviceFactorsSize) {
+        // Not enough space to store a new factor
+        printf("The maximum number of factors is %u. Cannot store new factor %llu\n", deviceFactorsSize, ff);
+        return;
+    }
     auto factorIdx = atomicAdd(deviceFactorsCount, 1);
     deviceFactors[factorIdx] = ff;
-//    printf("Device factors count = %d\n", *deviceFactorsCount);
-//    __syncthreads();
+//  printf("Factor found = %llu, ", ff);
+//  printf("Device factors count = %d\n", *deviceFactorsCount);
 }
 
-template <uint8_t BatchSize, typename PrimeT>
+template <uint8_t BatchSize, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
 __global__
-void trial_div(uint64_t * n, uint64_t nlen, typename device_prime_data<PrimeT>::data primeData, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
+void trial_div(uint64_t * n, uint64_t nlen,
+    data_impl<PrimeT, precomputeReciprocals> primeData,
+    int* deviceFactorsCount,
+    uint64_t * deviceFactors,
+    uint32_t deviceFactorsSize
+)
 {
     static_assert(BatchSize > 0);
     int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
@@ -177,7 +307,13 @@ void trial_div(uint64_t * n, uint64_t nlen, typename device_prime_data<PrimeT>::
     auto plen = primeData.primes_count;
     for(size_t i = index; i < plen; i += stride) {
         if constexpr (BatchSize == 1) {
-            if(!modnby1(n, nlen, p[i], primeData.reciprocals[i])) {
+            uint64_t residue;
+            if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+                residue = modnby1(n, nlen, p[i], primeData.reciprocals[i]);
+            } else {
+                residue = modnby1(n, nlen, p[i]);
+            }
+            if(!residue) {
                 pushFactor(p[i], deviceFactorsCount, deviceFactors, deviceFactorsSize);
             }
         } else {
@@ -194,13 +330,17 @@ void trial_div(uint64_t * n, uint64_t nlen, typename device_prime_data<PrimeT>::
                     break;
                 }
                 if (! (mod % p[i + j]) ) {
-    //    printf("Adding factor %llu\n", p[i+j]);
+//                  printf("Adding factor %llu\n", p[i+j]);
                     pushFactor(p[i + j], deviceFactorsCount, deviceFactors, deviceFactorsSize);
                 }
             }
         }
     }
 }
+
+
+
+
 
 std::vector<uint64_t> getFactorsFromDevice(int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
 {
@@ -213,11 +353,6 @@ std::vector<uint64_t> getFactorsFromDevice(int* deviceFactorsCount, uint64_t * d
     std::sort(std::begin(ret), std::end(ret));
     return ret;
 }
-
-
-
-
-
 
 
 // Gets the factors from the device, then repeatedly divides the number by the factors
@@ -266,7 +401,7 @@ auto device_synchronize()
 
 void output_usage(std::ostream & out)
 {
-    out << "Usage: cutrialdive -i <index> --tf-bits <exponent> [--prp-test]" << std::endl;
+    out << "Usage:\n    cutrialdive -i <index> --tf-bits <exponent> [--prp-test]" << std::endl;
 }
 
 
@@ -330,21 +465,20 @@ int main(int argc, char** argv)
         cudaMemcpy(cn, n, nlen*sizeof(uint64_t), cudaMemcpyHostToDevice);
         int * deviceFactorsCount = nullptr;
         uint64_t * deviceFactors = nullptr;
-        uint32_t const deviceFactorsSize = 65536;
+        uint32_t const deviceFactorsSize = 32768;
         alloc_device_factors(deviceFactorsCount, deviceFactors, deviceFactorsSize);
-
-
-
+        
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
         auto tfStart = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> sieve_time, computeDataTime, copyPrimeDataToHostTime;
     
+        constexpr auto precomputeReciprocals = PrecomputeReciprocals::no;
         std::vector<uint64_t> primes;
         primes.reserve(1ull << 22);
-        prime_data<uint64_t> primeData;
+        prime_data<uint64_t, precomputeReciprocals> primeData;
         primeData.reserve(1ull << 22);
-        device_prime_data<uint64_t> devicePrimeData;
+        device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
 
         for (auto k0 = uint64_t{2}, k1 = (std::min)(uint64_t{1} << 25, sieveUpperBound)
                 ; k1 <= sieveUpperBound
@@ -364,13 +498,18 @@ int main(int argc, char** argv)
             auto copyPrimeDataToHostStart = std::chrono::high_resolution_clock::now();
             devicePrimeData.copy_from_host(primes, primeData);
             copyPrimeDataToHostTime += std::chrono::high_resolution_clock::now() - copyPrimeDataToHostStart;
-            
+
             if (k1 <= 2642258) {
                 trial_div<3, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else if (k1 <= (1ull << 32)) {
                 trial_div<2, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
             } else {
                 trial_div<1, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
+            }
+            auto err = cudaGetLastError();
+            if(err != cudaSuccess) {
+                std::cout << "Error executing kernel" << std::endl;
+                printf("Launch error: %s\n", cudaGetErrorString(err));
             }
         }
         device_synchronize();

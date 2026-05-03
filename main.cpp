@@ -19,7 +19,7 @@
 #include <ranges>
 
 
-namespace smd = smarandachization;
+namespace ctd = cutrialdive;
 
 void output_help(std::ostream & out)
 {
@@ -127,7 +127,7 @@ bool eat_valued_option(char const* flag, char**& argv, Action act)
     return false;
 }
 
-std::vector<smd::factor<uint64_t>> parse_factors(std::string const & factors_str)
+std::vector<ctd::factor<uint64_t>> parse_factors(std::string const & factors_str)
 {
     using std::operator""sv;
     std::string const factor_regex_str{R"-([1-9][0-9]*(\^[1-9][0-9]*)?)-"};
@@ -135,7 +135,7 @@ std::vector<smd::factor<uint64_t>> parse_factors(std::string const & factors_str
     if(!std::regex_match(factors_str, factors_regex)) {
         throw std::runtime_error{"Invalid factors list"};
     }
-    std::vector<smd::factor<uint64_t>> factors;
+    std::vector<ctd::factor<uint64_t>> factors;
     constexpr auto delim{","sv};
     for (auto word : std::string_view{factors_str} | std::views::split(',')) {
         auto factor_str = std::string_view(word);
@@ -184,18 +184,18 @@ int main(int argc, char** argv)
         std::string output_path;
         for(; *ppargv; ++ppargv) {
             if(eat_valued_option<uint64_t>("-p", ppargv, [](auto index) {
-                smd::output_smarandache(std::cout, index) << std::endl;
+                ctd::output_smarandache(std::cout, index) << std::endl;
             })) {
                 return 0;
             }
             if(eat_valued_option<uint64_t>("--print-expression", ppargv, [](auto index){
-                smd::output_smarandache_expression(std::cout, index) << std::endl;
+                ctd::output_smarandache_expression(std::cout, index) << std::endl;
             })){
                 return 0;
             }
             uint64_t index{};
             if(eat_valued_option<uint64_t>("--single-prp", ppargv, [&index](auto idx) { index = idx; })) {
-                std::vector<smd::factor<uint64_t>> factors;
+                std::vector<ctd::factor<uint64_t>> factors;
                 ++ppargv; // go past value of --single-prp
                 if(eat_valued_option<std::string>("--factors", ppargv, [&factors](auto factors_str) {
                     factors = parse_factors(factors_str);
@@ -206,7 +206,7 @@ int main(int argc, char** argv)
                 if(*ppargv && !strcmp(*ppargv, "--boost-factors")) {
                     haveToBoostFactors = true;
                 }
-                smd::run_prp_test(index, factors, haveToBoostFactors);
+                ctd::run_prp_test(index, factors, haveToBoostFactors);
                 if(haveToBoostFactors) {
                     std::cout << "Factors used: ";
                     char const * sep = "";
@@ -238,9 +238,9 @@ int main(int argc, char** argv)
             std::cerr << "Invalid command line" << std::endl;
             return 1;
         }
-        std::vector<smd::result<uint64_t>> results{};
-        smd::time("Overall time: ", [&](){
-            smd::trial_factor(smd::trial_factoring_options{startIndex, endIndex,
+        std::vector<ctd::result<uint64_t>> results{};
+        ctd::time("Overall time: ", [&](){
+            ctd::trial_factor(ctd::trial_factoring_options{startIndex, endIndex,
                 tfStart, tfEnd,
                 haveOutputPath ? std::filesystem::path{output_path} : std::optional<std::filesystem::path>{}
             });
