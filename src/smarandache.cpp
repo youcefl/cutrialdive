@@ -13,6 +13,7 @@
 
 #include "hgint.hpp"
 #include "siever.hpp"
+#include "factors_buffer.hpp"
 #include "timer.hpp"
 
 
@@ -60,45 +61,40 @@ namespace cutrialdive
         throw std::runtime_error{"smarandache(n) for n >= 10^5 not supported yet"};
     }
 
-    void read_previous_results(uint64_t n0, uint64_t n1, std::vector<result<uint64_t>> & previous_results)
+    void read_previous_results(uint64_t n0, uint64_t n1, factoring_results<uint64_t, uint32_t> & previous_results)
     {
-        auto n = n0;
-        for(auto res : previous_results) {
-            if(res.n != n) {
-                std::ostringstream msg;
-                msg << "Index mismatch between results and current range (from results: "
-                    << res.n << ", from range: " << n << ")";
-                throw std::runtime_error(msg.str());
-            }
-            ++n;
+        if(n1 < n0) {
+            throw std::logic_error{"Invalid range specification, n0 must be less than or equal to n1."};
         }
+        if(n0 != previous_results.n0() || n1 - n0 != previous_results.size()) {
+            std::ostringstream ostr;
+            ostr << "Mismatch between factoring results: previous(n0=" 
+                    << previous_results.n0() << ", n1=" << previous_results.n0() + previous_results.size()
+                    << "), current(n0=" << n0 << ", n1=" << n1 << ").";
+            throw std::runtime_error{ostr.str()};
+        }
+
+        // @todo: Implement update of previous results
+        throw std::runtime_error{"Update of previous results not implemented yet"};
     }
 
-    template <typename T>
-    void dump_results(std::vector<result<T>> const & results, std::ostream & out)
-    {
-        std::for_each(std::begin(results), std::end(results), [&out](auto const & res){
-            out << res.n << " - ";
-            char const * sep = "";
-            std::for_each(std::begin(res.factors), std::end(res.factors), [&sep, &out](auto factor){
-                out << sep << factor.value;
-                if(factor.exponent > 1) {
-                    out << "^" << factor.exponent;
-                }
-                sep = ", ";
-            });
-            out << "\n";
-        });
-    }
 
+    /// Returns the Barrett multiplier for @param p
     uint64_t mu(uint64_t p)
     {
         return ~uint64_t{0} / p;
     }
 
+
+
+    namespace {
+        // Will we ever have a trial factoring reveal more than 128 factors in normal usage?
+        uint32_t MAX_FACTORS_PER_NUMBER = 128;
+    }
+
     void do_trial_factor(uint64_t n0, uint64_t n1,
         uint64_t f0, uint64_t f1,
-        std::vector<result<uint64_t>> & results
+        factoring_results<uint64_t, uint32_t> & results
         )
     {
         constexpr auto max_num_of_primes = size_t{1} << 22;
@@ -109,6 +105,7 @@ namespace cutrialdive
         inv_primes.reserve(max_num_of_primes);
         // residue of Sm(n0) modulo each prime
         std::vector<uint64_t> n0_residues;
+        factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, MAX_FACTORS_PER_NUMBER};
 
         auto const sm_n0 = smarandache<HgInt>(n0);
 
@@ -141,8 +138,7 @@ namespace cutrialdive
                     auto p = primes[i];
                     n0_residues[i] = local_sm_n0.mod(p);
                     if(!n0_residues[i]) {
-                        #pragma omp critical
-                        results[0].factors.push_back({p, 1});
+                        factors_buf.push_factor(0, p);
                     }
                     // We still push a value when p is 2 to avoid having the indice of
                     // p and mu(p) differ by one.
@@ -160,7 +156,7 @@ namespace cutrialdive
                 if(!primes.empty() && primes.front() == 2) {
                     n0_residues[0] = n & 1;
                     if(!n0_residues[0]) {
-                        results[i].factors.push_back({2, 1});
+                        factors_buf.push_factor(i, 2);
                     }
                     have_to_skip_front = true;
                 }
@@ -176,18 +172,16 @@ namespace cutrialdive
                         n0_residues[j] -= primes[j];
                     }
                     if(!n0_residues[j]) {
-                        #pragma omp critical
-                        results[i].factors.push_back({primes[j], 1});
+                        factors_buf.push_factor(i, primes[j]);
                     }
                 }
-                std::sort(std::begin(results[i].factors), std::end(results[i].factors),
-                    [](auto const & x, auto const & y){ return x.value < y.value; });
             }
             now = std::chrono::high_resolution_clock::now();
             propagation_time += std::chrono::duration<double>(now - startTime);
         }
         std::cout << "Initialization time: " << init_time.count() << "s" << std::endl;
         std::cout << "Propagation time: " << propagation_time.count() << "s" << std::endl;
+        results = factors_buf.to_factoring_results();
     }
 
     /// @brief Performs trial factoring according to given options
@@ -204,13 +198,13 @@ namespace cutrialdive
             }
             output_ptr = std::make_unique<std::ofstream>(path);
         }
-        std::vector<result<uint64_t>> results;
+        factoring_results<uint64_t, uint32_t> results{opts.n0, opts.n1 - opts.n0};
         std::cout << "Trial factoring starts, results will be written to "
             << (output_ptr ? (std::string{"file `"} + opts.output_path.value().string() + "'") : "the console") << std::endl;
         time("Trial factoring took ", [&](){
             trial_factor(opts.n0, opts.n1, opts.f0, opts.f1, results);
         });
-        dump_results(results, output_ptr ? *output_ptr.get() : std::cout);
+        (output_ptr ? *output_ptr.get() : std::cout) << results;
     }
 
 
@@ -223,7 +217,7 @@ namespace cutrialdive
     /// @param previous_results previous results (can be empty e.g. first run)
     void trial_factor(uint64_t n0, uint64_t n1,
         uint64_t f0, uint64_t f1,
-        std::vector<result<uint64_t>> & previous_results
+        factoring_results<uint64_t, uint32_t> & previous_results
     )
     {
         std::cout << "Maximum number of threads: " << omp_get_max_threads() << std::endl;
@@ -232,9 +226,6 @@ namespace cutrialdive
         }
         if(previous_results.empty()) {
             previous_results.reserve(n1 - n0);
-            for(auto i = n0; i < n1; ++i) {
-                previous_results.emplace_back(result<uint64_t>{i, {}});
-            }
         } else {
             read_previous_results(n0, n1, previous_results);
         }
@@ -242,7 +233,7 @@ namespace cutrialdive
     }
 
 
-    void run_prp_test(uint64_t n, std::vector<factor<uint64_t>> & factors, bool haveToBoostFactors)
+    void run_prp_test(uint64_t n, std::vector<factor<uint64_t, uint32_t>> & factors, bool haveToBoostFactors)
     {
         std::string const numberAsStr = std::string{"Sm("} + std::to_string(n) + ")";
         HgInt cofactor;

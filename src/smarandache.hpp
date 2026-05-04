@@ -2,6 +2,8 @@
  * Creation date: 2026.04.21
  * Created by Youcef Lemsafer
  */
+#pragma once
+
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -10,7 +12,8 @@
 #include <filesystem>
 #include <chrono>
 
-#pragma once
+
+#include "factoring_results.hpp"
 
 namespace cutrialdive
 {
@@ -32,27 +35,6 @@ namespace cutrialdive
     /// @param[in] n indice
     /// @return output stream
     std::ostream &output_smarandache_expression(std::ostream &out, uint64_t n);
-
-    /// @brief Struct holding a factor
-    /// @tparam T 
-    template <typename T>
-    struct factor
-    {
-        T value;
-        uint64_t exponent;
-    };
-
-    /// @brief Struct holding a result
-    /// @tparam T 
-    template <typename T>
-    struct result
-    {
-        /// @brief index
-        uint64_t n;
-        /// @brief Factors of Sm(n)
-        std::vector<factor<T>> factors;
-    };
-
 
     struct trial_factoring_options
     {
@@ -77,7 +59,7 @@ namespace cutrialdive
     /// @param results[in/out] previous factorization results if any (pass empty vector on first run)
     void trial_factor(uint64_t n0, uint64_t n1,
         uint64_t f0, uint64_t f1,
-        std::vector<result<uint64_t>> & results
+        factoring_results<uint64_t, uint32_t> & results
     );
 
     /// @brief Computes the cofactor i.e. number / (product of factors)
@@ -85,8 +67,8 @@ namespace cutrialdive
     /// @tparam Factor type
     /// @param number
     /// @param factors 
-    template <typename NumT, typename FactorT>
-    NumT compute_cofactor(NumT number, std::vector<factor<FactorT>> const & factors);
+    template <typename NumT, typename FactorT, typename ExponentT>
+    NumT compute_cofactor(NumT number, std::vector<factor<FactorT, ExponentT>> const & factors);
 
     /// @brief Run a PRP test on (Sm(n) / F) where F is the product of the provided factors
     /// If @param haveToBoostFactors is true we divide by each prime factor p as many times as possible
@@ -94,7 +76,7 @@ namespace cutrialdive
     /// @param n 
     /// @param factors known prime factors of Sm(n)
     /// @param haveToBoostFactors whether to boost the factors i.e. compute largest k that p^k divides Sm(n)
-    void run_prp_test(uint64_t n, std::vector<factor<uint64_t>> & factors, bool haveToBoostFactors);
+    void run_prp_test(uint64_t n, std::vector<factor<uint64_t, uint32_t>> & factors, bool haveToBoostFactors);
 }
 
 
@@ -155,8 +137,8 @@ namespace cutrialdive {
     /// @param number the number whose cofactor is to be computed
     /// @param factors list of factors (p_i, e_i)
     /// @return number / (product of p_i ^ e_i)
-    template <typename NumT, typename FactorT>
-    inline NumT compute_cofactor_exact(NumT number, std::vector<factor<FactorT>> const & factors)
+    template <typename NumT, typename FactorT, typename ExponentT>
+    inline NumT compute_cofactor_exact(NumT number, std::vector<factor<FactorT, ExponentT>> const & factors)
     {
         if(factors.empty()) {
             return number;
@@ -164,7 +146,7 @@ namespace cutrialdive {
         NumT product_of_factors{1};
         std::for_each(std::begin(factors), std::end(factors), 
             [&product_of_factors](auto const & factor) {
-                product_of_factors *= pow(NumT{factor.value}, factor.exponent);
+                product_of_factors *= pow(NumT{factor.prime}, factor.exponent);
         });
         return number / product_of_factors;
     }
@@ -177,7 +159,7 @@ namespace cutrialdive {
     /// @param factors list of factors (p_i, e_i) where the {e_i} are not necessarily maximal
     /// @return (number / (product of p_i ^ k_i)) where k_i >= e_i is such that the cofactor is not divisible by p_i
     template <typename NumT, typename FactorT>
-    inline NumT compute_cofactor_boosted(NumT number, std::vector<factor<FactorT>> & factors)
+    inline NumT compute_cofactor_boosted(NumT number, std::vector<factor<FactorT, uint32_t>> & factors)
     {
         if(factors.empty()) {
             return number;
@@ -185,14 +167,14 @@ namespace cutrialdive {
         NumT product_of_factors{1};
         std::for_each(std::begin(factors), std::end(factors), 
             [&product_of_factors](auto const & factor) {
-                product_of_factors *= pow(NumT{factor.value}, factor.exponent);
+                product_of_factors *= pow(NumT{factor.prime}, factor.exponent);
         });
         number /= product_of_factors;
         NumT quotient, remainder;
         std::for_each(std::begin(factors), std::end(factors),
             [&](auto & factor) {
                 while(true) {
-                    div_mod(number, factor.value, quotient, remainder);
+                    div_mod(number, factor.prime, quotient, remainder);
                     if(!!remainder) {
                         break;
                     }

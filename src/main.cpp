@@ -127,7 +127,7 @@ bool eat_valued_option(char const* flag, char**& argv, Action act)
     return false;
 }
 
-std::vector<ctd::factor<uint64_t>> parse_factors(std::string const & factors_str)
+std::vector<ctd::factor<uint64_t, uint32_t>> parse_factors(std::string const & factors_str)
 {
     using std::operator""sv;
     std::string const factor_regex_str{R"-([1-9][0-9]*(\^[1-9][0-9]*)?)-"};
@@ -135,7 +135,7 @@ std::vector<ctd::factor<uint64_t>> parse_factors(std::string const & factors_str
     if(!std::regex_match(factors_str, factors_regex)) {
         throw std::runtime_error{"Invalid factors list"};
     }
-    std::vector<ctd::factor<uint64_t>> factors;
+    std::vector<ctd::factor<uint64_t, uint32_t>> factors;
     constexpr auto delim{","sv};
     for (auto word : std::string_view{factors_str} | std::views::split(',')) {
         auto factor_str = std::string_view(word);
@@ -195,7 +195,7 @@ int main(int argc, char** argv)
             }
             uint64_t index{};
             if(eat_valued_option<uint64_t>("--single-prp", ppargv, [&index](auto idx) { index = idx; })) {
-                std::vector<ctd::factor<uint64_t>> factors;
+                std::vector<ctd::factor<uint64_t, uint32_t>> factors;
                 ++ppargv; // go past value of --single-prp
                 if(eat_valued_option<std::string>("--factors", ppargv, [&factors](auto factors_str) {
                     factors = parse_factors(factors_str);
@@ -211,7 +211,7 @@ int main(int argc, char** argv)
                     std::cout << "Factors used: ";
                     char const * sep = "";
                     std::for_each(std::begin(factors), std::end(factors), [&sep](auto factor){
-                        std::cout << sep << factor.value;
+                        std::cout << sep << factor.prime;
                         if(factor.exponent > 1) {
                             std::cout << "^" << factor.exponent;
                         }
@@ -238,7 +238,6 @@ int main(int argc, char** argv)
             std::cerr << "Invalid command line" << std::endl;
             return 1;
         }
-        std::vector<ctd::result<uint64_t>> results{};
         ctd::time("Overall time: ", [&](){
             ctd::trial_factor(ctd::trial_factoring_options{startIndex, endIndex,
                 tfStart, tfEnd,

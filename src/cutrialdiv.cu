@@ -1,6 +1,6 @@
 /*
-* Youcef Lemsafer
-* 2021.12.23
+* Created on 2021.12.23
+* Copyright (c) Youcef Lemsafer
 */
 
 #include <cinttypes>
@@ -15,6 +15,7 @@
 #include <functional>
 #include <omp.h>
 
+#include "device_factors_buffer.hpp"
 #include "hgint.hpp"
 #include "siever.hpp"
 #include "smarandache.hpp"
@@ -24,23 +25,6 @@
 
 using namespace cutrialdive;
 
-template <typename PtrT>
-void free_device_ptr(PtrT *& ptr)
-{
-    if(!ptr) {
-        return;
-    }
-    cudaFree(ptr);
-    ptr = nullptr;
-}
-
-template <typename PtrT>
-PtrT* alloc_device_ptr(uint64_t size)
-{
-    PtrT * ptr = nullptr;
-    cudaMalloc(&ptr, sizeof(*ptr) * size);
-    return ptr;
-}
 
 enum class PrecomputeReciprocals {
     no, yes
@@ -117,14 +101,20 @@ template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
 struct data_impl;
 template <typename PrimeT>
 struct data_impl<PrimeT, PrecomputeReciprocals::yes> {
+    using primes_type = PrimeT*;
+    using primes_count_type = uint64_t;
+
     PrimeT * primes;
     PrimeT * reciprocals;
     uint64_t primes_count;
 };
 template <typename PrimeT>
 struct data_impl<PrimeT, PrecomputeReciprocals::no> {
-    PrimeT * primes;
-    uint64_t primes_count;
+    using primes_type = PrimeT*;
+    using primes_count_type = uint64_t;
+
+    primes_type primes;
+    primes_count_type primes_count;
 };
 
 template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
@@ -209,152 +199,87 @@ inline void device_prime_data<PrimeT, precomputeReciprocals>::copy_from_host(
     }
 }
 
-template <typename ValueT>
-class device_vector
-{
-public:
-    device_vector() = default;
-    device_vector(device_vector&&) = default;
-    device_vector(device_vector const &) = delete;
-    device_vector& operator=(device_vector const &) = delete;
-    ~device_vector();
-
-    ValueT * data();
-    /// Returns allocated size
-    uint64_t size() const;
-    /// Resize to @param newSize (does not reallocate if newSize <= size())
-    void resize(uint64_t newSize);
-    /// Resize to @param size and fill with zeroes
-    void assign_zero(uint64_t size);
-private:
-    ValueT * values_{};
-    uint64_t size_{};
-};
-
-template <typename ValueT>
-inline
-device_vector<ValueT>::~device_vector()
-{
-    if(values_) {
-        free_device_ptr(values_);
-        values_ = nullptr;
-    }
-    size_ = 0;
-}
-
-template <typename ValueT>
-inline
-ValueT * device_vector<ValueT>::data()
-{
-    return values_;
-}
-
-template <typename ValueT>
-inline
-uint64_t device_vector<ValueT>::size() const
-{
-    return size_;
-}
-
-template <typename ValueT>
-inline
-void device_vector<ValueT>::resize(uint64_t newSize)
-{
-    if(newSize > size_) {
-        free_device_ptr(values_);
-        values_ = alloc_device_ptr<ValueT>(newSize);
-    }
-    size_ = newSize;
-}
-
-template <typename ValueT>
-inline
-void device_vector<ValueT>::assign_zero(uint64_t size)
-{
-    resize(size);
-    cudaMemset(values_, 0, sizeof(*values_) * size_);
-}
-
-
-__device__
-void pushFactor(uint64_t ff, int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
-{
-    if(*deviceFactorsCount == deviceFactorsSize) {
-        // Not enough space to store a new factor
-        printf("The maximum number of factors is %u. Cannot store new factor %llu\n", deviceFactorsSize, ff);
-        return;
-    }
-    auto factorIdx = atomicAdd(deviceFactorsCount, 1);
-    deviceFactors[factorIdx] = ff;
-//  printf("Factor found = %llu, ", ff);
-//  printf("Device factors count = %d\n", *deviceFactorsCount);
-}
 
 template <uint8_t BatchSize, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
-__global__
-void trial_div(uint64_t * n, uint64_t nlen,
-    data_impl<PrimeT, precomputeReciprocals> primeData,
-    int* deviceFactorsCount,
-    uint64_t * deviceFactors,
-    uint32_t deviceFactorsSize
+__device__ __forceinline__
+void push_prime_factors_in_batch(
+    uint64_t numberIndex,
+    size_t indexOfBatch,
+    typename data_impl<PrimeT, precomputeReciprocals>::primes_type primes,
+    typename data_impl<PrimeT, precomputeReciprocals>::primes_count_type primesLength,
+    typename device_factors_buffer<uint64_t>::device_view_t factorsBuffer,
+    uint64_t residue,
+    uint64_t divisor
 )
 {
-    static_assert(BatchSize > 0);
-    int index = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
-    int stride = blockDim.x * gridDim.x * BatchSize;
-
-    auto p = primeData.primes;
-    auto plen = primeData.primes_count;
-    for(size_t i = index; i < plen; i += stride) {
-        if constexpr (BatchSize == 1) {
-            uint64_t residue;
-            if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
-                residue = modnby1(n, nlen, p[i], primeData.reciprocals[i]);
-            } else {
-                residue = modnby1(n, nlen, p[i]);
+    if constexpr(BatchSize == 1) {
+        if(!residue) {
+            factorsBuffer.push_factor(numberIndex, divisor);
+        }
+    } else {
+        for (auto j = 0; j < BatchSize; ++j) {
+            if (indexOfBatch + j >= primesLength) {
+                break;
             }
-            if(!residue) {
-                pushFactor(p[i], deviceFactorsCount, deviceFactors, deviceFactorsSize);
-            }
-        } else {
-            uint64_t pp = p[i];
-            for(auto j = 1; j < BatchSize; ++j) {
-                if (i + j >= plen) {
-                    break;
-                }
-                pp *= p[i + j];
-            }
-            auto mod = modnby1(n, nlen, pp);
-            for (auto j = 0; j < BatchSize; ++j) {
-                if (i + j >= plen) {
-                    break;
-                }
-                if (! (mod % p[i + j]) ) {
-//                  printf("Adding factor %llu\n", p[i+j]);
-                    pushFactor(p[i + j], deviceFactorsCount, deviceFactors, deviceFactorsSize);
-                }
+            if (! (residue % primes[indexOfBatch + j]) ) {
+                factorsBuffer.push_factor(numberIndex, primes[indexOfBatch + j]);
             }
         }
     }
 }
 
 
-
-
-
-std::vector<uint64_t> getFactorsFromDevice(int* deviceFactorsCount, uint64_t * deviceFactors, uint32_t deviceFactorsSize)
+template <uint8_t BatchSize, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+__global__
+void trial_div(uint64_t n0, uint64_t n1,
+    uint64_t * firstNumber, uint64_t firstNumberLength,
+    data_impl<PrimeT, precomputeReciprocals> primeData,
+    typename device_factors_buffer<uint64_t>::device_view_t factorsBuffer
+)
 {
-    int factorsCount = 0;
-    cudaMemcpy(&factorsCount, deviceFactorsCount, sizeof(int), cudaMemcpyDeviceToHost);
-//    std::cout << "factorsCount = " << factorsCount << std::endl;
-    auto ret = std::vector<uint64_t>(std::size_t(factorsCount), uint64_t(0));
-//    std::cout << "Size of ret = " << ret.size() << std::endl;
-    cudaMemcpy(&ret[0], deviceFactors, sizeof(uint64_t)*factorsCount, cudaMemcpyDeviceToHost);
-    std::sort(std::begin(ret), std::end(ret));
-    return ret;
+    static_assert(BatchSize > 0);
+
+    if(n0 >= n1) {
+        return;
+    }
+
+    int const indexOfFirstPrime = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
+    int const stride = blockDim.x * gridDim.x * BatchSize;
+
+    auto primes = primeData.primes;
+    auto primesLength = primeData.primes_count;
+    for(size_t i = indexOfFirstPrime; i < primesLength; i += stride) {
+        uint64_t residue;
+        uint64_t divisor;
+        if constexpr (BatchSize == 1) {
+            divisor = primes[i];
+            if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
+                residue = modnby1(firstNumber, firstNumberLength, divisor, primeData.reciprocals[i]);
+            } else {
+                residue = modnby1(firstNumber, firstNumberLength, divisor);
+            }
+            push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(0, i, primes, primesLength, factorsBuffer, residue, divisor);
+        } else {
+            divisor = primes[i];
+            for(auto j = 1; j < BatchSize; ++j) {
+                if (i + j >= primesLength) {
+                    break;
+                }
+                divisor *= primes[i + j];
+            }
+            residue = modnby1(firstNumber, firstNumberLength, divisor);
+            push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(0, i, primes, primesLength, factorsBuffer, residue, divisor);
+        }
+
+        /// Propagate residue to next numbers in sequence
+        for(auto n = n0 + 1; n < n1; ++n) {
+            residue = (__uint128_t(residue) * 100000 + n) % divisor;
+            push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(n - n0, i, primes, primesLength, factorsBuffer, residue, divisor);
+        }
+    }
 }
 
-
+#if 0
 // Gets the factors from the device, then repeatedly divides the number by the factors
 // to get the cofactor.
 // number <- number / (f_1^e_1*f_2^e_2...f_n^e_n)
@@ -374,20 +299,7 @@ std::vector<std::pair<uint64_t, uint32_t>> getFactors(HgInt & number, int* devic
     }
     return factors;
 }
-
-void alloc_device_factors(int*& deviceFactorsCount, uint64_t *& deviceFactors, uint32_t deviceFactorsSize)
-{
-    cudaMalloc(&deviceFactorsCount, sizeof(*deviceFactorsCount));
-    cudaMemset(deviceFactorsCount, 0, sizeof(*deviceFactorsCount));
-    cudaMalloc(&deviceFactors, sizeof(*deviceFactors)*deviceFactorsSize);
-}
-
-void free_device_factors(int*& deviceFactorsCount, uint64_t *& deviceFactors)
-{
-    cudaFree(deviceFactorsCount);
-    cudaFree(deviceFactors);
-}
-
+#endif
 
 auto device_synchronize()
 {
@@ -443,7 +355,7 @@ int main(int argc, char** argv)
         return 1;
     }
     
-    std::cout << "Using up to " << omp_get_max_threads() << " thread(s) on the CPU" << std::endl;
+    std::cout << "Using up to " << omp_get_max_threads() << " thread(s) on the CPU." << std::endl;
 
     try {
         auto sm671 = smarandache<HgInt>(ii);
@@ -463,11 +375,8 @@ int main(int argc, char** argv)
             std::cerr << "Error returned by cudaMalloc(): " << cudaGetErrorString(cuStatus) << std::endl;
         }
         cudaMemcpy(cn, n, nlen*sizeof(uint64_t), cudaMemcpyHostToDevice);
-        int * deviceFactorsCount = nullptr;
-        uint64_t * deviceFactors = nullptr;
-        uint32_t const deviceFactorsSize = 32768;
-        alloc_device_factors(deviceFactorsCount, deviceFactors, deviceFactorsSize);
-        
+
+
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
         auto tfStart = std::chrono::high_resolution_clock::now();
@@ -480,6 +389,10 @@ int main(int argc, char** argv)
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
 
+        constexpr auto numbersCount = 10000;
+
+        cutrialdive::device_factors_buffer<uint64_t> factorsBuffer{ii, numbersCount, 128};
+
         for (auto k0 = uint64_t{2}, k1 = (std::min)(uint64_t{1} << 25, sieveUpperBound)
                 ; k1 <= sieveUpperBound
                 ; k0 = k1, k1 += uint64_t{1} << 25
@@ -489,9 +402,11 @@ int main(int argc, char** argv)
             cutrialdive::sieve(k0, k1, primes);
             sieve_time += std::chrono::high_resolution_clock::now() - sieveStart;
 
-            auto computeDataStart = std::chrono::high_resolution_clock::now();
-            compute_prime_data(primes, primeData);
-            computeDataTime += std::chrono::high_resolution_clock::now() - computeDataStart;
+            if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
+                auto computeDataStart = std::chrono::high_resolution_clock::now();
+                compute_prime_data(primes, primeData);
+                computeDataTime += std::chrono::high_resolution_clock::now() - computeDataStart;
+            }
 
             device_synchronize();
 
@@ -499,12 +414,12 @@ int main(int argc, char** argv)
             devicePrimeData.copy_from_host(primes, primeData);
             copyPrimeDataToHostTime += std::chrono::high_resolution_clock::now() - copyPrimeDataToHostStart;
 
-            if (k1 <= 2642258) {
-                trial_div<3, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
-            } else if (k1 <= (1ull << 32)) {
-                trial_div<2, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
+            if(k1 <= 2642258) {
+                trial_div<3, uint64_t><<<256*numSMs, 256>>>(ii, ii + numbersCount, cn, nlen, devicePrimeData.get_data(), factorsBuffer.device_view());
+            } else if(k1 <= (1ull << 32)) {
+                trial_div<2, uint64_t><<<256*numSMs, 256>>>(ii, ii + numbersCount, cn, nlen, devicePrimeData.get_data(), factorsBuffer.device_view());
             } else {
-                trial_div<1, uint64_t><<<256*numSMs, 256>>>(cn, nlen, devicePrimeData.get_data(), deviceFactorsCount, deviceFactors, deviceFactorsSize);
+                trial_div<1, uint64_t><<<256*numSMs, 256>>>(ii, ii + numbersCount, cn, nlen, devicePrimeData.get_data(), factorsBuffer.device_view());
             }
             auto err = cudaGetLastError();
             if(err != cudaSuccess) {
@@ -517,27 +432,15 @@ int main(int argc, char** argv)
         auto tfEnd = std::chrono::high_resolution_clock::now();
         
 
-        std::cout << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
+        if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
+            std::cout << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
+        }
         std::cout << "Copying prime data to device took " << copyPrimeDataToHostTime.count() << "s (cumulated time)" << std::endl;
 
-        auto foundFactors = getFactors(sm671, deviceFactorsCount, deviceFactors, deviceFactorsSize);
-        free_device_factors(deviceFactorsCount, deviceFactors);
-        std::cout << "Found " << foundFactors.size() << " factor(s)";
-        bool isFirst = true;
-        for(auto const & f : foundFactors) {
-            if(!isFirst) {
-                std::cout << ", ";
-            } else {
-                std::cout << ":" << std::endl;
-            }
-            std::cout << f.first;
-            if (f.second > 1) {
-                std::cout << "^" << f.second;
-            }
-            isFirst = false;
-        }
+        auto foundFactors = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
+        std::cout << foundFactors;
 
-        std::cout << std::endl << "[Factoring took "
+        std::cout << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 
                         tfStart).count() / 1000 << "s ("
                    << "sieve: " << sieve_time.count() << "s)]";

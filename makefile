@@ -17,8 +17,11 @@ PRIMESIEVE_LIB_FLAGS ?= -L/usr/lib/x86_64-linux-gnu/ -lprimesieve
 
 CXXFLAGS_TO_ADD ?=
 
-CFLAGS ?= -march=native -mtune=native -O3 -I$(GWNUM_DIR) -I$(GMP_INCLUDE_DIR) $(SIEVER_FLAGS)
-CXXFLAGS ?= -std=c++23 -march=native -mtune=native -O3 -fopenmp $(CXXFLAGS_TO_ADD) $(SIEVER_FLAGS) -I$(GMP_INCLUDE_DIR)
+CC_OPTIM_FLAGS ?= -O3 -march=native -mtune=native
+
+
+CFLAGS ?= $(CC_OPTIM_FLAGS) -I$(GWNUM_DIR) -I$(GMP_INCLUDE_DIR) $(SIEVER_FLAGS)
+CXXFLAGS ?= -std=c++23 $(CC_OPTIM_FLAGS)  -fopenmp $(CXXFLAGS_TO_ADD) $(SIEVER_FLAGS) -I$(GMP_INCLUDE_DIR)
 GMP_LIB_FLAGS ?= -L$(GMP_LIB_DIR) -lgmp
 GWNUM_LIB_FLAGS ?= -L../p95v3019b21.source/gwnum -l:gwnum.a
 LIB_FLAGS_TO_ADD ?=
