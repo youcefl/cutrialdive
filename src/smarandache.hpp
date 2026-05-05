@@ -8,8 +8,6 @@
 #include <iostream>
 #include <vector>
 #include <functional>
-#include <optional>
-#include <filesystem>
 #include <chrono>
 
 
@@ -25,42 +23,16 @@ namespace cutrialdive
     NumberT smarandache(uint64_t n);
 
     /// @brief Outputs Sm(n)
-    /// @param[in/out] out the output stream
     /// @param[in] n indice
+    /// @param[in,out] out the output stream
     /// @return output stream
-    std::ostream &output_smarandache(std::ostream &out, uint64_t n);
+    std::ostream &output_smarandache(uint64_t n, std::ostream &out);
 
     /// @brief Outputs Sm(n) as an expression
     /// @param[in/out] out the output stream
     /// @param[in] n indice
     /// @return output stream
-    std::ostream &output_smarandache_expression(std::ostream &out, uint64_t n);
-
-    struct trial_factoring_options
-    {
-        /// @brief Lower bound of the set of indices
-        uint64_t n0;
-        /// @brief Upper bound of the set of indices
-        uint64_t n1;
-        /// @brief Lower bound on the set of primes
-        uint64_t f0;
-        /// @brief Upper bound on the set of primes
-        uint64_t f1;
-        /// @brief Optional: path of the output file
-        std::optional<std::filesystem::path> output_path;
-    };
-
-    /// @brief Performs trial factoring according to given options
-    /// @param opts trial factoring options
-    void trial_factor(trial_factoring_options const & opts);
-
-    /// @brief Performs trial factoring of Sm(k) for all k in [n0, n1[
-    /// using the prime numbers in [f0, f1[
-    /// @param results[in/out] previous factorization results if any (pass empty vector on first run)
-    void trial_factor(uint64_t n0, uint64_t n1,
-        uint64_t f0, uint64_t f1,
-        factoring_results<uint64_t, uint32_t> & results
-    );
+    std::ostream &output_smarandache_expression(uint64_t n, std::ostream &out);
 
     /// @brief Computes the cofactor i.e. number / (product of factors)
     /// @tparam NumT number type
@@ -75,7 +47,7 @@ namespace cutrialdive
     /// and the corresponding exponent is updated, otherwise we use the factors as provided.
     /// @param n 
     /// @param factors known prime factors of Sm(n)
-    /// @param haveToBoostFactors whether to boost the factors i.e. compute largest k that p^k divides Sm(n)
+    /// @param haveToBoostFactors whether to boost the factors i.e. compute largest k such that p^k divides Sm(n)
     void run_prp_test(uint64_t n, std::vector<factor<uint64_t, uint32_t>> & factors, bool haveToBoostFactors);
 }
 
@@ -120,15 +92,6 @@ namespace cutrialdive {
         } else {
             throw std::runtime_error{"smarandache(n) for n >= 10^5 not supported yet"};
         }
-    }
-
-    template <typename Func>
-    inline void time(char const* prefix, Func f)
-    {
-        auto start_time = std::chrono::high_resolution_clock::now();
-        f();
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::cout << prefix << std::chrono::duration<double>(end_time - start_time) << std::endl;
     }
 
     /// @brief Computes the cofactor by dividing @param number by the product of provided @param factors

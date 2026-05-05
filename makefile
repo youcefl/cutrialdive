@@ -6,6 +6,8 @@ CC ?= gcc
 OUT_DIR ?= ./bin
 SRC_DIR ?= ./src
 
+CUTRIALDIVE_VERSION = \"0.0.1\"
+
 GMP_DIR ?= /usr/local
 GMP_INCLUDE_DIR ?= $(GMP_DIR)/include
 GMP_LIB_DIR ?= $(GMP_DIR)/lib
@@ -19,19 +21,26 @@ CXXFLAGS_TO_ADD ?=
 
 CC_OPTIM_FLAGS ?= -O3 -march=native -mtune=native
 
+COMMON_FLAGS = $(CC_OPTIM_FLAGS) -DCUTRIALDIVE_VERSION="$(CUTRIALDIVE_VERSION)" -I$(GMP_INCLUDE_DIR) $(SIEVER_FLAGS)
 
-CFLAGS ?= $(CC_OPTIM_FLAGS) -I$(GWNUM_DIR) -I$(GMP_INCLUDE_DIR) $(SIEVER_FLAGS)
-CXXFLAGS ?= -std=c++23 $(CC_OPTIM_FLAGS)  -fopenmp $(CXXFLAGS_TO_ADD) $(SIEVER_FLAGS) -I$(GMP_INCLUDE_DIR)
+CFLAGS ?= $(COMMON_FLAGS) -I$(GWNUM_DIR)
+CXXFLAGS ?= -std=c++23 -fopenmp $(COMMON_FLAGS) $(CXXFLAGS_TO_ADD)
+
 GMP_LIB_FLAGS ?= -L$(GMP_LIB_DIR) -lgmp
 GWNUM_LIB_FLAGS ?= -L../p95v3019b21.source/gwnum -l:gwnum.a
 LIB_FLAGS_TO_ADD ?=
 LIB_FLAGS ?= $(PRIMESIEVE_LIB_FLAGS) $(GMP_LIB_FLAGS) $(LIB_FLAGS_TO_ADD) $(GWNUM_LIB_FLAGS)
 
 
-OBJS = $(OUT_DIR)/smarandache.o \
+OBJS = $(OUT_DIR)/command_line.o \
        $(OUT_DIR)/gw_utility.o \
+       $(OUT_DIR)/mode.o \
+       $(OUT_DIR)/modular_arithmetic_detail.o \
        $(OUT_DIR)/prp.o \
-	   $(OUT_DIR)/timer.o
+	   $(OUT_DIR)/smarandache.o \
+       $(OUT_DIR)/timer.o \
+	   $(OUT_DIR)/trial_factoring.o \
+	   $(OUT_DIR)/trial_factoring_options.o
 
 all: $(OUT_DIR)/cutrialdive
 

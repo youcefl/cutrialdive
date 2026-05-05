@@ -8,25 +8,14 @@
 #include <span>
 #include <ostream>
 
+#include "factor.hpp"
+
 namespace cutrialdive {
 
     template <typename ValueT, typename ExponentT> class factoring_results;
     template <typename ValueT, typename ExponentT>
     std::ostream & operator<<(std::ostream & out, factoring_results<ValueT, ExponentT> const & results);
 
-    /// A prime factor with its exponent
-    template <typename ValueT, typename ExponentT>
-    struct factor {
-        ValueT prime;
-        ExponentT exponent;
-    };
-
-    /// Sorts the factors in the given span (from lowest to highest)
-    template <typename ValueT, typename ExponentT>
-    void sort_factors(std::span<factor<ValueT, ExponentT>> span);
-
-    template <typename ValueT, typename ExponentT>
-    std::ostream & operator<<(std::ostream & out, factor<ValueT, ExponentT> const & factor);
 
     /// Results of a trial factoring run
     template <typename ValueT, typename ExponentT>
@@ -77,27 +66,6 @@ namespace cutrialdive {
 }
 
 namespace cutrialdive {
-
-    template <typename ValueT, typename ExponentT>
-    inline
-    void sort_factors(std::span<factor<ValueT, ExponentT>> span)
-    {
-        std::sort(std::begin(span), std::end(span), [](auto const & x, auto const & y) {
-            return x.prime < y.prime;
-        });
-    }
-
-
-    template <typename ValueT, typename ExponentT>
-    inline
-    std::ostream & operator<<(std::ostream & out, factor<ValueT, ExponentT> const & factor)
-    {
-        out << factor.prime;
-        if(factor.exponent > ExponentT{1}) {
-            out << "^" << factor.exponent;
-        }        
-        return out;
-    }
 
     template <typename ValueT, typename ExponentT>
     inline

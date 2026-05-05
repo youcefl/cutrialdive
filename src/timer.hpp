@@ -8,13 +8,17 @@
 #include <string>
 #include <chrono>
 
-class timer
-{
-public:
-    timer(std::string prefix, std::ostream & out);
-    ~timer();
-private:
-    std::string prefix_;
-    std::ostream & out_;
-    decltype(std::chrono::high_resolution_clock::now()) start_time_;
-};
+namespace cutrialdive {
+
+    class timer
+    {
+    public:
+        timer(std::string prefix, std::ostream & out);
+        ~timer();
+    private:
+        std::string prefix_;
+        std::ostream & out_;
+        decltype(std::chrono::high_resolution_clock::now()) start_time_;
+    };
+
+}

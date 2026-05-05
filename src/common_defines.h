@@ -2,9 +2,7 @@
 * Creation date: 2026.05.04
 * Copyright (c) Youcef Lemsafer
 */
-
 #pragma once
-
 
 #if defined __CUDA_ARCH__
 #  define CUTRIALDIVE_IS_CUDA 1

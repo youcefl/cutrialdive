@@ -25,8 +25,6 @@ namespace cutrialdive {
     /// @param[out] reciprocals vector such that reciprocals[i] == reciprocal(primes[i]) for each i < primes.size()
     void compute_reciprocals(std::vector<uint64_t> const & primes, std::vector<uint64_t> & reciprocals);
 
-//#if CUTRIALDIVE_IS_CUDA
-
     template <typename NumT>
     struct initial_residue {
         NumT value;
@@ -45,7 +43,12 @@ namespace cutrialdive {
     // i.e. rnd = floor((2^128 - 1) / d) - d
     CUTRIALDIVE_DEVICE uint64_t mod2by1(uint64_t u1, uint64_t u0, uint64_t d, uint64_t rnd);
 
-//#endif // CUTRIALDIVE_IS_CUDA
+    /// Returns the Barrett multiplier for @param p
+    uint64_t mu(uint64_t p);
+}
+
+
+namespace cutrialdive {
 
     template <typename NumT>
     inline
@@ -194,5 +197,11 @@ namespace cutrialdive {
     }
 
 #endif // CUTRIALDIVE_IS_CUDA
+
+    /// Returns the Barrett multiplier for @param p
+    inline uint64_t mu(uint64_t p)
+    {
+        return ~uint64_t{0} / p;
+    }
 
 }
