@@ -389,7 +389,7 @@ int main(int argc, char** argv)
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
 
-        constexpr auto numbersCount = 10000;
+        constexpr auto numbersCount = 1;
 
         cutrialdive::device_factors_buffer<uint64_t> factorsBuffer{ii, numbersCount, 128};
 

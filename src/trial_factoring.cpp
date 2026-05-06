@@ -65,8 +65,8 @@ namespace cutrialdive {
         std::vector<uint64_t> primes, inv_primes;
         primes.reserve(max_num_of_primes);
         inv_primes.reserve(max_num_of_primes);
-        // residue of S(n0) modulo each prime
-        std::vector<uint64_t> n0_residues;
+        // residue of S(n) modulo each prime
+        std::vector<uint64_t> residues;
         factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, MAX_FACTORS_PER_NUMBER};
 
         auto const sm_n0 = NumberSequenceT::value(n0);
@@ -81,15 +81,15 @@ namespace cutrialdive {
             primes.clear();
             inv_primes.clear();
             sieve(fx, fy, primes);
-            if(n0_residues.size() < primes.size()) {
-                n0_residues.reserve(primes.size());
-                n0_residues.assign(primes.size(), uint64_t{});
-            } else if(n0_residues.size() > primes.size()) {
-                n0_residues.resize(primes.size());
+            if(residues.size() < primes.size()) {
+                residues.reserve(primes.size());
+                residues.assign(primes.size(), uint64_t{});
+            } else if(residues.size() > primes.size()) {
+                residues.resize(primes.size());
             }
             inv_primes.assign(primes.size(), 0);
 
-            // Compute S(n0) mod p and, if p != 2, the inverse of p mod 2^64.
+            // Compute S(n) mod p and, if p != 2, the inverse of p mod 2^64.
             auto startTime = std::chrono::high_resolution_clock::now();
             #pragma omp parallel
             {
@@ -98,13 +98,13 @@ namespace cutrialdive {
                 #pragma omp for
                 for(size_t i = 0; i < i_max; ++i) {
                     auto p = primes[i];
-                    n0_residues[i] = local_sm_n0.mod(p);
-                    if(!n0_residues[i]) {
+                    residues[i] = local_sm_n0.mod(p);
+                    if(!residues[i]) {
                         factors_buf.push_factor(0, p);
                     }
                     // We still push a value when p is 2 to avoid having the indice of
                     // p and mu(p) differ by one.
-                    inv_primes[i] = p == 2 ? 0 : mu(p);
+                    inv_primes[i] = (p == 2) ? 0 : mu(p);
                 }
             }
             auto now = std::chrono::high_resolution_clock::now();
@@ -116,8 +116,8 @@ namespace cutrialdive {
                 // Sieve results are always ordered so 2 can only be at the front.
                 bool have_to_skip_front = false;
                 if(!primes.empty() && primes.front() == 2) {
-                    n0_residues[0] = NumberSequenceT::next_value_mod_2(n0_residues[0], n);
-                    if(!n0_residues[0]) {
+                    residues[0] = NumberSequenceT::next_value_mod_2(residues[0], n);
+                    if(!residues[0]) {
                         factors_buf.push_factor(i, 2);
                     }
                     have_to_skip_front = true;
@@ -127,16 +127,8 @@ namespace cutrialdive {
                 for(size_t j = j0;
                     j < j_max;
                     ++j) {
-                    n0_residues[j] = NumberSequenceT::next_value_mod_mu(n0_residues[j], n, primes[j], inv_primes[j]);
-#if 0
-                    auto a = __uint128_t(n0_residues[j]) * 100000 + n;
-                    auto q = (a * inv_primes[j]) >> 64;
-                    n0_residues[j] = a - q * primes[j];
-                    if(n0_residues[j] >= primes[j]) {
-                        n0_residues[j] -= primes[j];
-                    }
-#endif
-                    if(!n0_residues[j]) {
+                    residues[j] = NumberSequenceT::next_value_mod_mu(residues[j], n, primes[j], inv_primes[j]);
+                    if(!residues[j]) {
                         factors_buf.push_factor(i, primes[j]);
                     }
                 }
