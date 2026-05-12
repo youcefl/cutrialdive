@@ -46,6 +46,9 @@ all: $(OUT_DIR) $(OUT_DIR)/cutrialdive
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
 
+$(OUT_DIR)/autotests.o: src/autotests.cu
+	$(NVCC) $(NVCCFLAGS) -c -o $@ $<
+
 $(OUT_DIR)/trial_factoring.o: src/trial_factoring.cu
 	$(NVCC) $(NVCCFLAGS) -c -o $@ $<
 

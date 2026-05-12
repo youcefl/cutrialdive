@@ -32,7 +32,8 @@ LIB_FLAGS_TO_ADD ?=
 LIB_FLAGS ?= $(PRIMESIEVE_LIB_FLAGS) $(GMP_LIB_FLAGS) $(LIB_FLAGS_TO_ADD) $(GWNUM_LIB_FLAGS)
 
 
-OBJS = $(OUT_DIR)/command_line.o \
+OBJS = $(OUT_DIR)/autotests.o \
+	   $(OUT_DIR)/command_line.o \
        $(OUT_DIR)/gw_utility.o \
        $(OUT_DIR)/mode.o \
        $(OUT_DIR)/modular_arithmetic_detail.o \

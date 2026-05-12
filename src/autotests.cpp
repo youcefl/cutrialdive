@@ -9,6 +9,7 @@
 #include <vector>
 #include <stdio.h>
 
+#include "common_defines.h"
 #include "modular_arithmetic_detail.hpp"
 #include "siever.hpp"
 
@@ -33,6 +34,7 @@ namespace cutrialdive {
         return output_range(out, std::begin(vec), std::end(vec));
     }
 
+#ifdef CUTRIALDIVE_HAS_GPU
     // Tests reciprocal on the device
     __global__
     void treciprocal()
@@ -66,7 +68,6 @@ namespace cutrialdive {
         }
     }
 
-    // Test mod2by1 on the device
     __global__
     void tmod2by1()
     {
@@ -128,6 +129,7 @@ namespace cutrialdive {
         }
     }
 
+#endif // CUTRIALDIVE_HAS_GPU
 
     int autotest()
     {
@@ -342,6 +344,7 @@ namespace cutrialdive {
                     std::cerr << "  Actual: "; output_range(std::cerr, primes); std::cerr << std::endl;
                 }
             }
+#ifdef CUTRIALDIVE_HAS_GPU
             {
                 treciprocal<<<1, 1>>>();
                 cudaDeviceSynchronize();
@@ -354,6 +357,7 @@ namespace cutrialdive {
                 tmodnby1<<<1, 1>>>();
                 cudaDeviceSynchronize();
             }
+#endif // CUTRIALDIVE_HAS_GPU
             std::cout << "Done" << std::endl;
             return 0;
     }
