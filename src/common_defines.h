@@ -15,3 +15,9 @@
 #  define CUTRIALDIVE_HOST
 #  define CUTRIALDIVE_DEVICE_AND_HOST
 #endif
+
+#if defined CUTRIALDIVE_HAS_GPU && defined __CUDA_ARCH__
+#  define CUTRIALDIVE_INLINE __forceinline__
+#else
+#  define CUTRIALDIVE_INLINE inline
+#endif

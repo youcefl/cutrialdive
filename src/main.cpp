@@ -10,7 +10,7 @@
 #include "number_sequence.hpp"
 #include "builtin_number_sequences.hpp"
 #include "trial_factoring.hpp"
-
+#include "autotests.hpp"
 
 namespace {
 
@@ -53,6 +53,9 @@ int main(int argc, char** argv)
             print_help(std::cout);
             return 0;
         }
+        if(parser.are_autotests_requested()) {
+            return ctd::autotest();
+        }
         auto options = *parser.get_options();
         if(options.wants_value) {
             return print_value(options.mode, options.n, std::cout);
@@ -64,7 +67,6 @@ int main(int argc, char** argv)
             run_prp_test(options.mode, options.n, options.factors, options.wants_boosted_factors, std::cout);
             return 0;
         }
-//        std::cout << "Trial factoring options: " << *options.tf_options << std::endl;
         trial_factor(options.mode, *options.tf_options);
     } catch(std::exception const & e) {
         std::cerr << e.what() << std::endl;

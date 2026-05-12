@@ -24,7 +24,7 @@ namespace cutrialdive {
         bool wants_expression;
         uint64_t n;
         bool wants_single_prp;
-        bool wants_boosted_factors;
+        bool wants_boosted_factors{true};
         std::vector<factor<uint64_t, uint32_t>> factors;
         std::optional<trial_factoring_options> tf_options;
     };
@@ -36,11 +36,13 @@ namespace cutrialdive {
         bool is_help_requested() const;
         bool is_usage_requested() const;
         bool is_version_requested() const;
+        bool are_autotests_requested() const;
         std::optional<command_line_options> get_options() const;
     private:
         bool wants_help_;
         bool wants_usage_;
         bool wants_version_;
+        bool wants_autotests_;
         std::optional<command_line_options> options_;
     };
 
@@ -70,6 +72,11 @@ namespace cutrialdive {
     bool command_line_parser::is_version_requested() const
     {
         return wants_version_;
+    }
+    inline
+    bool command_line_parser::are_autotests_requested() const
+    {
+        return wants_autotests_;
     }
     inline
     std::optional<command_line_options> command_line_parser::get_options() const

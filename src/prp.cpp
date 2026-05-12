@@ -38,8 +38,10 @@ namespace cutrialdive {
                         + numberAsStr + " took ").c_str(), out};
             out << "Boosting factors: " << std::boolalpha << haveToBoostFactors << std::endl;
             out << "Factors: ";
-            std::for_each(std::begin(factors), std::end(factors), [&out](auto const & fact) {
-                out << ", " << fact;
+            char const * sep = "";
+            std::for_each(std::begin(factors), std::end(factors), [&out, &sep](auto const & fact) {
+                out << sep << fact;
+                sep = ", ";
             });
             out << std::endl;
             cofactor = haveToBoostFactors ? compute_cofactor_boosted(number, factors)

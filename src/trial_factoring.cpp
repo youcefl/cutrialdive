@@ -3,7 +3,9 @@
 * Copyright (c) Youcef Lemsafer
 */
 #include "trial_factoring.hpp"
-
+#ifdef CUTRIALDIVE_HAS_GPU
+#include "trial_factoring.cuh"
+#endif
 #include <iostream>
 #include <fstream>
 #include <omp.h>
@@ -45,11 +47,6 @@ namespace {
 
 namespace cutrialdive {
 
-    namespace {
-        // Will we ever have a trial factoring reveal more than 128 factors in normal usage?
-        uint32_t MAX_FACTORS_PER_NUMBER = 128;
-    }
-
     template <typename NumberSequenceT>
         requires NumberSequence<NumberSequenceT>
     void do_trial_factor(
@@ -67,7 +64,7 @@ namespace cutrialdive {
         inv_primes.reserve(max_num_of_primes);
         // residue of S(n) modulo each prime
         std::vector<uint64_t> residues;
-        factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, MAX_FACTORS_PER_NUMBER};
+        factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, opts.max_factors_per_number};
 
         auto const sm_n0 = NumberSequenceT::value(n0);
 
@@ -161,7 +158,11 @@ namespace cutrialdive {
         } else {
             read_previous_results(opts.n0, opts.n1, previous_results);
         }
+#ifdef CUTRIALDIVE_HAS_GPU
+        device_trial_factor<NumberSequenceT>(opts, previous_results);
+#else
         do_trial_factor<NumberSequenceT>(opts, previous_results);
+#endif
     }
 
     /// @brief Performs trial factoring according to given options
@@ -184,9 +185,10 @@ namespace cutrialdive {
         factoring_results<uint64_t, uint32_t> results{opts.n0, opts.n1 - opts.n0};
         std::cout << "Trial factoring starts, results will be written to "
             << (output_ptr ? (std::string{"file `"} + opts.output_path.value().string() + "'")
-                           : "the console")
+                           : "the console.")
             << std::endl;
-        std::cout << "Maximum number of threads: " << omp_get_max_threads() << std::endl;
+        std::cout << "TF range is [" << opts.f0 << ", " << opts.f1 << "[." << std::endl;
+        std::cout << "Will use up to " << omp_get_max_threads() << " threads on the CPU." << std::endl;
         {
             timer tfTimer{"Trial factoring took ", std::cout};
             

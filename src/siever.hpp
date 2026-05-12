@@ -2,7 +2,8 @@
 * Youcef Lemsafer, 2026.04.21
 * Definition of the sieving back-end
 */
-//
+#pragma once
+
 #include <vector>
 #include <cstdint>
 #ifdef CUTRIALDIVE_HAS_PRIMESIEVE
@@ -31,7 +32,7 @@ namespace cutrialdive {
 
         if constexpr (siever == Siever::primesieve) {
 #ifdef CUTRIALDIVE_HAS_PRIMESIEVE
-            primesieve::generate_primes(start, end ? end : end - 1, &primes);
+            primesieve::generate_primes(start, end ? end - 1 : end, &primes);
 #else
             static_assert(false, "Sieving library primesieve is not available");
 #endif

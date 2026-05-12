@@ -24,7 +24,7 @@ namespace cutrialdive {
         switch(modeFlag) {
             case mode_flag::mersenne: return {"mersenne"};
             case mode_flag::smarandache: return {"smarandache"};
-            default: "unknown";
+            //default: "unknown";
         }
     }
 

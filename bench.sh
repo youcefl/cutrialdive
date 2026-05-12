@@ -4,16 +4,16 @@
 
 echo '| TF limit | Digits | Time(s) |'
 echo '|----------|--------|---------|'
-for i in 12221 22221 42221 62221 82221;
+
+indices=(12221 22221 42221 62221 82221)
+digits=(49999 99999 199999 299999 399999)
+
+for i in {0..4};
 do
     for bits in 33 34;
     do
-        out=$(./bin-cu/cutrialdive -i ${i} --tf-bits ${bits} | tee -a bench-run-output.txt)
-        echo -n "| "
-        echo -n $(echo ${out} | sed -e 's@.*Trial factoring to \([0-9^]\+\).*@\1@g')
-        echo -n " | "
-        echo -n $(echo ${out} | sed -e 's@.* \([0-9]\+\) digits.*@\1@g')
-        echo -n " | "
+        out=$(./bin-cu/cutrialdive --mode smarandache -s ${indices[i]} --tf-bits ${bits} | tee -a bench-run-output.txt)
+        echo -n "| 2^${bits} | ${digits[i]} | "
         echo -n $(echo ${out} | sed -e 's@.*\[Factoring took \([0-9]\+\.[0-9]\+\).*@\1@g')
         echo " |"
     done

@@ -8,6 +8,8 @@ NVCC = nvcc
 OUT_DIR ?= ./bin-cu
 SRC_DIR ?= ./src
 
+CUTRIALDIVE_VERSION = \"0.0.1\"
+
 GMP_DIR ?= /usr/local
 GMP_INCLUDE_DIR ?= $(GMP_DIR)/include
 GMP_LIB_DIR ?= $(GMP_DIR)/lib
@@ -19,25 +21,33 @@ PRIMESIEVE_LIB_FLAGS ?= -L/usr/lib/x86_64-linux-gnu/ -lprimesieve
 
 CC_OPTIM_FLAGS ?= -O3 -march=native -mtune=native
 NVCC_OPTIM_FLAGS ?= -O3
-STD_CPP_FLAG ?= -std=c++20
+STD_CPP_FLAG ?= -std=c++23
+COMMON_FLAGS = $(CC_OPTIM_FLAGS) -fopenmp -DCUTRIALDIVE_HAS_GPU -DCUTRIALDIVE_VERSION="$(CUTRIALDIVE_VERSION)" -I$(GMP_INCLUDE_DIR) $(SIEVER_FLAGS)
 
-CFLAGS = -fopenmp -fPIC $(CC_OPTIM_FLAGS) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
-CXXFLAGS = $(STD_CPP_FLAG) -fopenmp -fPIC $(CC_OPTIM_FLAGS) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
-NVCCFLAGS = $(STD_CPP_FLAG) $(NVCC_OPTIM_FLAGS) -Xcompiler "$(CC_OPTIM_FLAGS)" -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+
+CFLAGS = $(COMMON_FLAGS) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+CXXFLAGS = $(STD_CPP_FLAG) $(COMMON_FLAGS) -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
+NVCCFLAGS = -std=c++20 -DCUTRIALDIVE_HAS_GPU $(NVCC_OPTIM_FLAGS) -Xcompiler "$(STD_CPP_FLAG) $(CC_OPTIM_FLAGS) $(COMMON_FLAGS)" -I$(GMP_INCLUDE_DIR) -I$(GWNUM_DIR) $(SIEVER_FLAGS)
 
 
 OBJS = $(OUT_DIR)/autotests.o \
-       $(OUT_DIR)/cutrialdiv.o \
-	   $(OUT_DIR)/gw_utility.o \
+	   $(OUT_DIR)/command_line.o \
+       $(OUT_DIR)/gw_utility.o \
+	   $(OUT_DIR)/main.o \
 	   $(OUT_DIR)/mode.o \
 	   $(OUT_DIR)/modular_arithmetic_detail.o \
 	   $(OUT_DIR)/prp.o \
-	   $(OUT_DIR)/timer.o
+	   $(OUT_DIR)/smarandache.o \
+       $(OUT_DIR)/timer.o \
+	   $(OUT_DIR)/trial_factoring.o
 
 all: $(OUT_DIR) $(OUT_DIR)/cutrialdive
 
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
+
+$(OUT_DIR)/trial_factoring.o: src/trial_factoring.cu
+	$(NVCC) $(NVCCFLAGS) -c -o $@ $<
 
 $(OUT_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<

@@ -24,6 +24,8 @@ namespace cutrialdive {
         uint64_t f1;
         /// @brief Optional: path of the output file
         std::optional<std::filesystem::path> output_path;
+        /// @brief Maximum number of factors per number (default = 128)
+        uint32_t max_factors_per_number{128};
     };
 
     std::ostream & operator<<(std::ostream & out, trial_factoring_options const & options);

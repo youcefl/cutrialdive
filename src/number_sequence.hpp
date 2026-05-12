@@ -31,15 +31,22 @@ namespace cutrialdive {
         { Seq::value(std::declval<typename Seq::index_type>()) } 
             -> std::same_as<typename Seq::value_type>;
         
-        // Modular recurrence:
-        // Given S(n) mod p, n, p and mu(p) return S(n+1) mod p
-        // p is guaranteed to be odd
-        // mu(p) is the Barrett reciprocal of p
-        { Seq::next_value_mod_mu(
-            std::declval<typename Seq::residue_type>(), // S(n) mod p
+        // Returns S(n+1) mod d given S(n) mod d, n and d
+        { Seq::next_value_mod(
+            std::declval<typename Seq::residue_type>(), // S(n) mod d
             std::declval<typename Seq::index_type>(),   // n
-            std::declval<typename Seq::residue_type>(), // p
-            std::declval<typename Seq::residue_type>()  // mu(p)
+            std::declval<typename Seq::residue_type>()  // d
+        ) } -> std::same_as<typename Seq::residue_type>;
+        
+        // Modular recurrence with Barrett multiplier
+        // Given S(n) mod d, n, d and mu(d) return S(n+1) mod d
+        // d is guaranteed to be odd
+        // mu(d) is the Barrett reciprocal of d
+        { Seq::next_value_mod_mu(
+            std::declval<typename Seq::residue_type>(), // S(n) mod d
+            std::declval<typename Seq::index_type>(),   // d
+            std::declval<typename Seq::residue_type>(), // d
+            std::declval<typename Seq::residue_type>()  // mu(d)
         ) } -> std::same_as<typename Seq::residue_type>;
 
         // Given S(n) mod 2 return S(n+1) mod 2

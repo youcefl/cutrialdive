@@ -77,6 +77,7 @@ namespace cutrialdive {
         : wants_help_{}
         , wants_usage_{}
         , wants_version_{}
+        , wants_autotests_{}
     {
         if(argc == 2) {
             if(!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
@@ -85,6 +86,10 @@ namespace cutrialdive {
             }
             if(!strcmp(argv[1], "--version")) {
                 wants_version_ = true;
+                return;
+            }
+            if(!strcmp(argv[1], "--autotest")) {
+                wants_autotests_ = true;
                 return;
             }
         }
@@ -121,7 +126,9 @@ namespace cutrialdive {
                 eat_valued_option<std::string>("--factors", ppargv, buildException, [&](auto factors_str) {
                     options_->factors = parse_factors<uint64_t, uint32_t>(factors_str);
                 });
-                options_->wants_boosted_factors = *ppargv && !strcmp(*ppargv, "--boost-factors");
+                if(*ppargv && !strcmp(*ppargv, "--no-boost-factors")) {
+                    options_->wants_boosted_factors = false;
+                }
                 return;
             }
             haveStart = haveStart || eat_valued_option<uint64_t>("-s", ppargv, buildException,
@@ -176,7 +183,8 @@ namespace cutrialdive {
                                 | -s n0 [-e n1] ( --tf-bits bits_count 
                                                 | --tf-start f0 --tf-end f1 )
                                         [--output <output_path>]
-                                | --single-prp n [--factors "f_1, ..., f_m"]
+                                | --single-prp n [--factors "f_1, ..., f_m"
+                                                      [--no-boost-factors]]
                                 )
                 ))
 )-";
@@ -261,11 +269,13 @@ namespace cutrialdive {
             Example: "2^5, 3^2, 223, 1279"
             Spaces after commas are optional.
 
-    --boost-factors
-            When enabled, for each factor p, the program automatically
+    --no-boost-factors
+            Consider the factors has already having the maximal exponents.
+            By default, for each factor p, the program automatically
             determines the largest exponent e such that p^e divides S(n).
             This ensures that the cofactor used for the PRP test is not
             divisible by any of the given primes.
+            This option disables that behavior.
 )-";
 }
 
