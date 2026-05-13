@@ -6,10 +6,14 @@
 
 #include <ostream>
 
+#include "common_defines.h"
 #include "hgint.hpp"
 #include "number_sequence.hpp"
+#include "barrett_mu_types.hpp"
 #include "smarandache.hpp"
-#include "common_defines.h"
+#include "number_sequence.hpp"
+#include "modular_arithmetic_detail.hpp"
+
 
 namespace cutrialdive {
 
@@ -19,17 +23,20 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
+        using barrett_mu_type = barrett_mu_both_t;
+
         static char const* short_name();
         static value_type value(index_type n);
         static void print_value(index_type n, std::ostream & out);
         static void print_expression(index_type n, std::ostream & out);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_2(index_type n);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod(residue_type v_n_mod_p, index_type n, residue_type p);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_mu(residue_type v_n_mod_p, index_type n, residue_type p, barrett_mu_type mu_p);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
         /// Computes the shift by which S(n) needs to be multiplied in order to append n+1
         /// e.g. S(9) * shift + 10 = S(10), shift is 100, so the returned value is simply
         /// ceil(log10(n+1)).
         CUTRIALDIVE_DEVICE_AND_HOST static index_type compute_shift(index_type n);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod(residue_type v_n_mod_p, index_type n, residue_type p);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_mu(residue_type v_n_mod_p, index_type n, residue_type p, residue_type mu_p);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
     };
 
     template <>
@@ -38,12 +45,15 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
+        using barrett_mu_type = barrett_mu64_t;
+
         static char const* short_name();
         static value_type value(index_type n);
         static void print_value(index_type n, std::ostream & out);
         static void print_expression(index_type n, std::ostream & out);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_2(index_type n);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod(residue_type v_n_mod_p, index_type n, residue_type p);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_mu(residue_type v_n_mod_p, index_type n, residue_type p, residue_type mu_p);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_mu(residue_type v_n_mod_p, index_type n, residue_type p, barrett_mu_type mu_p);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
     };
 }
@@ -103,6 +113,14 @@ namespace cutrialdive {
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
+    uint64_t number_sequence<mode_flag::smarandache>::value_mod_2(
+        uint64_t n
+    )
+    {
+        return n & 1;
+    }
+
+    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
     uint64_t number_sequence<mode_flag::smarandache>::next_value_mod(
         uint64_t v_n_mod_p,
         uint64_t n,
@@ -117,13 +135,13 @@ namespace cutrialdive {
         uint64_t v_n_mod_p,
         uint64_t n,
         uint64_t p,
-        uint64_t mu_p
+        barrett_mu_type mu_p
     )
     {
         auto shift = compute_shift(n);
         auto a = __uint128_t(v_n_mod_p) * shift + n + 1;
-        auto q = (a * mu_p) >> 64;
-        auto r = uint64_t(a) - q * p;
+        auto q = (a >> 64) ? mul128hi(a, mu_p.mu128) : ((a * mu_p.mu64) >> 64);
+        __uint128_t r = a - q * p;
         return r >= p ? r - p : r;
     }
     
@@ -166,6 +184,15 @@ namespace cutrialdive {
     {
         out << "2^" << n << "-1";
     }
+
+    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
+    uint64_t number_sequence<mode_flag::mersenne>::value_mod_2(
+        uint64_t n
+    )
+    {
+        return n > 0;
+    }
+
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
     uint64_t number_sequence<mode_flag::mersenne>::next_value_mod(

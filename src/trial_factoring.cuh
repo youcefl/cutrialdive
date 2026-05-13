@@ -12,6 +12,9 @@
 #include "hgint.hpp"
 #include "siever.hpp"
 #include "modular_arithmetic_detail.hpp"
+#include "barrett_mu_types.hpp"
+#include "barrett_reciprocals.hpp"
+#include "number_sequence.hpp"
 
 
 namespace cutrialdive {
@@ -192,6 +195,20 @@ namespace cutrialdive {
     }
 
 
+    __device__ __forceinline__
+    void push_prime_factor(
+        uint64_t numberIndex,
+        typename device_factors_buffer<uint64_t>::device_view_t factorsBuffer,
+        uint64_t residue,
+        uint64_t divisor
+    )
+    {
+        if(!residue) {
+            factorsBuffer.push_factor(numberIndex, divisor);
+        }
+    }
+
+
     template <uint8_t BatchSize, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
     __device__ __forceinline__
     void push_prime_factors_in_batch(
@@ -205,9 +222,7 @@ namespace cutrialdive {
     )
     {
         if constexpr(BatchSize == 1) {
-            if(!residue) {
-                factorsBuffer.push_factor(numberIndex, divisor);
-            }
+            push_prime_factor(numberIndex, factorsBuffer, residue, divisor);
         } else {
             for (auto j = 0; j < BatchSize; ++j) {
                 if (indexOfBatch + j >= primesLength) {
@@ -220,10 +235,26 @@ namespace cutrialdive {
         }
     }
 
+    template <typename NumberSequenceT, typename PrimeT>
+    __global__
+    void trial_div_by_2(uint64_t n0, uint64_t n1, typename device_factors_buffer<uint64_t>::device_view_t factorsBuffer)
+    {
+        if(n0 >= n1) {
+            return;
+        }
+
+        auto residue = NumberSequenceT::value_mod_2(n0);
+        push_prime_factor(0, factorsBuffer, residue, 2);
+        /// Propagate residue mod 2 to next numbers in sequence
+        for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
+            residue = NumberSequenceT::next_value_mod_2(residue, n);
+            push_prime_factor(n + 1 - n0, factorsBuffer, residue, 2);
+        }
+    }
 
     template <typename NumberSequenceT, uint8_t BatchSize, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
     __global__
-    void trial_div(uint64_t n0, uint64_t n1,
+    void trial_div_by_odd_primes(uint64_t n0, uint64_t n1,
         uint64_t * firstNumber, uint64_t firstNumberLength,
         data_impl<PrimeT, precomputeReciprocals> primeData,
         typename device_factors_buffer<uint64_t>::device_view_t factorsBuffer
@@ -235,24 +266,24 @@ namespace cutrialdive {
             return;
         }
 
+        auto primes = primeData.primes;
+        auto primesLength = primeData.primes_count;
+
         int const indexOfFirstPrime = (threadIdx.x + blockIdx.x * blockDim.x) * BatchSize;
         int const stride = blockDim.x * gridDim.x * BatchSize;
 
-        auto primes = primeData.primes;
-        auto primesLength = primeData.primes_count;
+
         for(size_t i = indexOfFirstPrime; i < primesLength; i += stride) {
             uint64_t residue;
-            uint64_t divisor;
+            uint64_t divisor = primes[i];
             if constexpr (BatchSize == 1) {
-                divisor = primes[i];
                 if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
                     residue = modnby1(firstNumber, firstNumberLength, divisor, primeData.reciprocals[i]);
                 } else {
                     residue = modnby1(firstNumber, firstNumberLength, divisor);
                 }
-                push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(0, i, primes, primesLength, factorsBuffer, residue, divisor);
+                push_prime_factor(0, factorsBuffer, residue, divisor);
             } else {
-                divisor = primes[i];
                 for(auto j = 1; j < BatchSize; ++j) {
                     if (i + j >= primesLength) {
                         break;
@@ -263,9 +294,14 @@ namespace cutrialdive {
                 push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(0, i, primes, primesLength, factorsBuffer, residue, divisor);
             }
 
-            /// Propagate residue to next numbers in sequence
+            /// Propagate residues to next numbers in sequence
+            auto barrettMu = compute_barrett_mu<NumberSequenceT>(divisor);
             for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
-                residue = NumberSequenceT::next_value_mod(residue, n, divisor);
+                if constexpr(std::is_same_v<decltype(barrettMu), no_barrett_t>) {
+                    residue = NumberSequenceT::next_value_mod(residue, n, divisor);
+                } else {
+                    residue = NumberSequenceT::next_value_mod_mu(residue, n, divisor, barrettMu);
+                }
                 push_prime_factors_in_batch<BatchSize, PrimeT, precomputeReciprocals>(n + 1 - n0, i, primes, primesLength, factorsBuffer, residue, divisor);
             }
         }
@@ -331,19 +367,24 @@ namespace cutrialdive {
 
         cutrialdive::device_factors_buffer<uint64_t> factorsBuffer{opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number};
 
-        int i = 0;
+        // Special treatment for 2 if needed
+        auto f0 = opts.f0;
+        if(f0 <= 2 && opts.f1 > 2) {
+            f0 = 3;
+            trial_div_by_2<NumberSequenceT, uint64_t><<<1, 1>>>(opts.n0, opts.n1, factorsBuffer.device_view());
+        }
 
-        for (auto k0 = uint64_t{opts.f0}, k1 = (std::min)(opts.f0 + (uint64_t{1} << 25), opts.f1)
-                ; k1 <= opts.f1
-                ; k0 = k1, k1 += uint64_t{1} << 25
-            ) {
+        constexpr auto segmentLen = uint64_t{1} << 25;
+        auto const f1 = opts.f1;
+
+        // Main loop for odd primes only
+        for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
+            fx < f1;
+            fx = fy, fy = (std::min)(fy + segmentLen, f1)
+        ) {
             auto sieveStart = std::chrono::high_resolution_clock::now();
             primes.clear();
-            cutrialdive::sieve(k0, k1, primes);
-            if(!i) {
-                std::cout << "First prime: " << primes.front() << std::endl;
-            }
-            ++i;
+            sieve(fx, fy, primes);
             sieve_time += std::chrono::high_resolution_clock::now() - sieveStart;
 
             if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
@@ -358,12 +399,12 @@ namespace cutrialdive {
             devicePrimeData.copy_from_host(primes, primeData);
             copyPrimeDataToHostTime += std::chrono::high_resolution_clock::now() - copyPrimeDataToHostStart;
 
-            if(k1 <= 2642258) {
-                trial_div<NumberSequenceT, 3, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
-            } else if(k1 <= (1ull << 32)) {
-                trial_div<NumberSequenceT, 2, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
+            if(fy <= 2642258) {
+                trial_div_by_odd_primes<NumberSequenceT, 3, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
+            } else if(fy <= (1ull << 32)) {
+                trial_div_by_odd_primes<NumberSequenceT, 2, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
             } else {
-                trial_div<NumberSequenceT, 1, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
+                trial_div_by_odd_primes<NumberSequenceT, 1, uint64_t><<<256*numSMs, 256>>>(opts.n0, opts.n1, cuN, sn0Len, devicePrimeData.get_data(), factorsBuffer.device_view());
             }
             auto err = cudaGetLastError();
             if(err != cudaSuccess) {

@@ -17,6 +17,7 @@
 #include "timer.hpp"
 #include "modular_arithmetic_detail.hpp"
 #include "number_sequence.hpp"
+#include "barrett_reciprocals.hpp"
 #include "builtin_number_sequences.hpp"
 
 
@@ -54,87 +55,62 @@ namespace cutrialdive {
         factoring_results<uint64_t, uint32_t> & results
         )
     {
-        constexpr auto max_num_of_primes = size_t{1} << 22;
-        constexpr auto segment_len = uint64_t{1} << 26;
-
         uint64_t n0 = opts.n0, n1 = opts.n1, f0 = opts.f0, f1 = opts.f1;
 
-        std::vector<uint64_t> primes, inv_primes;
-        primes.reserve(max_num_of_primes);
-        inv_primes.reserve(max_num_of_primes);
-        // residue of S(n) modulo each prime
-        std::vector<uint64_t> residues;
         factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, opts.max_factors_per_number};
 
-        auto const sm_n0 = NumberSequenceT::value(n0);
+        // 2 is a special case, deal with it now so that only odd primes remain
+        if(f0 <= 2 && f1 > 2) {
+            f0 = 3;
+            auto residue = NumberSequenceT::value_mod_2(n0);
+            if(!residue) {
+                factors_buf.push_factor(0, 2);
+            }
+            for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
+                residue = NumberSequenceT::next_value_mod_2(residue, n);
+                if(!residue) {
+                    factors_buf.push_factor(n + 1 - n0, 2);
+                }
+            }
+        }
 
-        auto init_time = std::chrono::duration<double>{},
-             propagation_time = init_time;
+        constexpr auto max_num_of_primes = size_t{1} << 22;
+        constexpr auto segmentLen = uint64_t{1} << 26;
 
-        for(auto fx = f0, fy = (std::min)(fx + segment_len, f1);
-            fy <= f1;
-            fx = fy, fy = (std::max)(fx + segment_len, f1)
+        auto const firstNumber = NumberSequenceT::value(n0);
+        std::vector<uint64_t> primes;
+        primes.reserve(max_num_of_primes);
+
+
+        for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
+            fx < f1;
+            fx = fy, fy = (std::min)(fy + segmentLen, f1)
         ) {
             primes.clear();
-            inv_primes.clear();
             sieve(fx, fy, primes);
-            if(residues.size() < primes.size()) {
-                residues.reserve(primes.size());
-                residues.assign(primes.size(), uint64_t{});
-            } else if(residues.size() > primes.size()) {
-                residues.resize(primes.size());
-            }
-            inv_primes.assign(primes.size(), 0);
 
-            // Compute S(n) mod p and, if p != 2, the inverse of p mod 2^64.
-            auto startTime = std::chrono::high_resolution_clock::now();
-            #pragma omp parallel
-            {
-                HgInt local_sm_n0{sm_n0};
-                size_t const i_max = primes.size();
-                #pragma omp for
-                for(size_t i = 0; i < i_max; ++i) {
-                    auto p = primes[i];
-                    residues[i] = local_sm_n0.mod(p);
-                    if(!residues[i]) {
-                        factors_buf.push_factor(0, p);
-                    }
-                    // We still push a value when p is 2 to avoid having the indice of
-                    // p and mu(p) differ by one.
-                    inv_primes[i] = (p == 2) ? 0 : mu(p);
+            size_t const iEnd = primes.size();
+            #pragma omp parallel for
+            for(auto i = 0; i < iEnd; ++i) {
+                auto p = primes[i];
+                auto residue = firstNumber.mod(p);
+                if(!residue) {
+                    factors_buf.push_factor(0, p);
                 }
-            }
-            auto now = std::chrono::high_resolution_clock::now();
-            init_time += std::chrono::duration<double>(now - startTime);
-            startTime = now;
-            auto n = n0;
-            for(auto i = 1; i < n1 - n0; ++i, ++n) {
-                // 2 is so special that it dictates a special treatment.
-                // Sieve results are always ordered so 2 can only be at the front.
-                bool have_to_skip_front = false;
-                if(!primes.empty() && primes.front() == 2) {
-                    residues[0] = NumberSequenceT::next_value_mod_2(residues[0], n);
-                    if(!residues[0]) {
-                        factors_buf.push_factor(i, 2);
+                /// Propagate residues to next numbers in sequence
+                auto barrettMu = compute_barrett_mu<NumberSequenceT>(p);
+                for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
+                    if constexpr(std::is_same_v<decltype(barrettMu), no_barrett_t>) {
+                        residue = NumberSequenceT::next_value_mod(residue, n, p);
+                    } else {
+                        residue = NumberSequenceT::next_value_mod_mu(residue, n, p, barrettMu);
                     }
-                    have_to_skip_front = true;
-                }
-                size_t j0 = have_to_skip_front ? 1 : 0, j_max = primes.size();
-                #pragma omp parallel for
-                for(size_t j = j0;
-                    j < j_max;
-                    ++j) {
-                    residues[j] = NumberSequenceT::next_value_mod_mu(residues[j], n, primes[j], inv_primes[j]);
-                    if(!residues[j]) {
-                        factors_buf.push_factor(i, primes[j]);
+                    if(!residue) {
+                        factors_buf.push_factor(n + 1 - n0, p);
                     }
                 }
             }
-            now = std::chrono::high_resolution_clock::now();
-            propagation_time += std::chrono::duration<double>(now - startTime);
         }
-        std::cout << "Initialization time: " << init_time.count() << "s" << std::endl;
-        std::cout << "Propagation time: " << propagation_time.count() << "s" << std::endl;
         results = factors_buf.to_factoring_results();
     }
 

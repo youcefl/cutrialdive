@@ -43,8 +43,17 @@ namespace cutrialdive {
     // i.e. rnd = floor((2^128 - 1) / d) - d
     CUTRIALDIVE_DEVICE uint64_t mod2by1(uint64_t u1, uint64_t u0, uint64_t d, uint64_t rnd);
 
-    /// Returns the Barrett multiplier for @param p
-    uint64_t mu(uint64_t p);
+    /// Returns the 64-bit Barrett multiplier for @param p
+    /// @pre p is odd
+    CUTRIALDIVE_DEVICE uint64_t mu64(uint64_t p);
+
+    /// Returns the 128-bit Barrett multiplier for @param p
+    /// @pre p is odd
+    CUTRIALDIVE_DEVICE __uint128_t mu128(uint64_t p);
+
+    /// Returns the high 128 bits of the 256 bits product of two 128 bit integers,
+    /// in english: returns (a * b) / 2^128.
+    CUTRIALDIVE_DEVICE __uint128_t mul128hi(__uint128_t a, __uint128_t b);
 }
 
 
@@ -198,10 +207,35 @@ namespace cutrialdive {
 
 #endif // CUTRIALDIVE_IS_CUDA
 
-    /// Returns the Barrett multiplier for @param p
-    inline uint64_t mu(uint64_t p)
+    CUTRIALDIVE_DEVICE
+    inline uint64_t mu64(uint64_t p)
     {
-        return ~uint64_t{0} / p;
+        return (~uint64_t{0}) / p;
     }
 
+    CUTRIALDIVE_DEVICE
+    inline __uint128_t mu128(uint64_t p)
+    {
+        return (~__uint128_t{0}) / p;
+    }
+
+    CUTRIALDIVE_DEVICE
+    inline __uint128_t mul128hi(__uint128_t a, __uint128_t b)
+    {
+        // Let a and b's base 2^64 representation be
+        // a = a0 + 2^64*a1
+        // b = b0 + 2^64*b1
+        // then
+        // ab = a0b0 + (a0b1+a1b0)*2^64 + a1b1*2^128
+        // . a0b0 contributes nothing to the result
+        // . propagate carry from middle term if needed
+        uint64_t a0 = a & ~uint64_t{0};
+        uint64_t a1 = a >> 64;
+        uint64_t b0 = b & ~uint64_t{0};
+        uint64_t b1 = b >> 64;
+        __uint128_t lmid = __uint128_t{a0} * b1;
+        __uint128_t mid = lmid + __uint128_t{a1} * b0;
+        uint32_t carry = (mid < lmid) ? 1 : 0;
+        return __uint128_t{a1} * b1 + carry + (mid >> 64);
+    }
 }

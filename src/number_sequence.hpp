@@ -14,6 +14,7 @@ namespace cutrialdive {
         typename Seq::index_type;
         typename Seq::value_type;
         typename Seq::residue_type;
+        typename Seq::barrett_mu_type;
         
         // A short name for the sequence e.g. M for Mersenne, Sm for Smarandache.
         { Seq::short_name() } 
@@ -28,8 +29,12 @@ namespace cutrialdive {
             -> std::same_as<void>;
         
         // Returns S(n)
-        { Seq::value(std::declval<typename Seq::index_type>()) } 
+        { Seq::value(std::declval<typename Seq::index_type>()) }
             -> std::same_as<typename Seq::value_type>;
+
+        // Returns S(n) mod 2
+        { Seq::value_mod_2(std::declval<typename Seq::index_type>()) }
+            -> std::same_as<typename Seq::residue_type>;
         
         // Returns S(n+1) mod d given S(n) mod d, n and d
         { Seq::next_value_mod(
@@ -44,9 +49,9 @@ namespace cutrialdive {
         // mu(d) is the Barrett reciprocal of d
         { Seq::next_value_mod_mu(
             std::declval<typename Seq::residue_type>(), // S(n) mod d
-            std::declval<typename Seq::index_type>(),   // d
+            std::declval<typename Seq::index_type>(),   // n
             std::declval<typename Seq::residue_type>(), // d
-            std::declval<typename Seq::residue_type>()  // mu(d)
+            std::declval<typename Seq::barrett_mu_type>()  // mu(d)
         ) } -> std::same_as<typename Seq::residue_type>;
 
         // Given S(n) mod 2 return S(n+1) mod 2
