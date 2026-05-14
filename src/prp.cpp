@@ -11,7 +11,7 @@
 #include "number_sequence.hpp"
 #include "builtin_number_sequences.hpp"
 #include "timer.hpp"
-#include "mode.hpp"
+#include "num_seq_dispatch.hpp"
 
 bool isPRP(HgInt number)
 {
@@ -62,7 +62,7 @@ namespace cutrialdive {
 
 
     void run_prp_test(
-        mode_flag modeFlag,
+        num_seq_id numSeqId,
         uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,
@@ -71,7 +71,7 @@ namespace cutrialdive {
     {
         timer tfTimer{"PRP test took ", std::cout};
 
-        dispatch_mode<decltype(n)>(modeFlag, [&]<typename Seq>() {
+        dispatch_num_seq<decltype(n)>(numSeqId, [&]<typename Seq>() {
             run_prp_test<Seq>(n, factors, haveToBoostFactors, std::cout);
         });
     }

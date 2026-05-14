@@ -108,25 +108,25 @@ namespace cutrialdive
     }
 
     char const*
-    number_sequence<mode_flag::smarandache>::short_name()
+    number_sequence<num_seq_id::smarandache>::short_name()
     {
         return "Sm";
     }
 
-    typename number_sequence<mode_flag::smarandache>::value_type
-    number_sequence<mode_flag::smarandache>::value(index_type n)
+    typename number_sequence<num_seq_id::smarandache>::value_type
+    number_sequence<num_seq_id::smarandache>::value(index_type n)
     {
         return smarandache<value_type>(n);
     }
 
     void
-    number_sequence<mode_flag::smarandache>::print_value(index_type n, std::ostream & out)
+    number_sequence<num_seq_id::smarandache>::print_value(index_type n, std::ostream & out)
     {
         output_smarandache(n, out);
     }
 
     void
-    number_sequence<mode_flag::smarandache>::print_expression(index_type n, std::ostream & out)
+    number_sequence<num_seq_id::smarandache>::print_expression(index_type n, std::ostream & out)
     {
         output_smarandache_expression(n, out);
     }

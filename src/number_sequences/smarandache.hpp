@@ -17,7 +17,7 @@ namespace cutrialdive
     // Smarandache base 10 i.e. concatenation of the first n integers > 0 written in base 10.
     // S(1) = 1, S(2) = 12, ..., S(10) = 12345678910, ...
     template <>
-    struct number_sequence<mode_flag::smarandache>
+    struct number_sequence<num_seq_id::smarandache>
     {
         using index_type = uint64_t;
         using value_type = HgInt;
@@ -44,8 +44,8 @@ namespace cutrialdive {
 
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    typename number_sequence<mode_flag::smarandache>::index_type
-    number_sequence<mode_flag::smarandache>::compute_shift(index_type n)
+    typename number_sequence<num_seq_id::smarandache>::index_type
+    number_sequence<num_seq_id::smarandache>::compute_shift(index_type n)
     {
         auto m = n + 1;
         // Most frequent cases first
@@ -67,7 +67,7 @@ namespace cutrialdive {
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<mode_flag::smarandache>::value_mod_2(
+    uint64_t number_sequence<num_seq_id::smarandache>::value_mod_2(
         uint64_t n
     )
     {
@@ -75,7 +75,7 @@ namespace cutrialdive {
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<mode_flag::smarandache>::next_value_mod(
+    uint64_t number_sequence<num_seq_id::smarandache>::next_value_mod(
         uint64_t v_n_mod_p,
         uint64_t n,
         uint64_t p
@@ -85,7 +85,7 @@ namespace cutrialdive {
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<mode_flag::smarandache>::next_value_mod_mu(
+    uint64_t number_sequence<num_seq_id::smarandache>::next_value_mod_mu(
         uint64_t v_n_mod_p,
         uint64_t n,
         uint64_t p,
@@ -100,7 +100,7 @@ namespace cutrialdive {
     }
     
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<mode_flag::smarandache>::next_value_mod_2(
+    uint64_t number_sequence<num_seq_id::smarandache>::next_value_mod_2(
         uint64_t v_n_mod_p,
         uint64_t n
     )

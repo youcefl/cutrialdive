@@ -17,6 +17,7 @@
 #include "timer.hpp"
 #include "modular_arithmetic_detail.hpp"
 #include "number_sequence.hpp"
+#include "num_seq_dispatch.hpp"
 #include "barrett_reciprocals.hpp"
 #include "builtin_number_sequences.hpp"
 
@@ -144,7 +145,7 @@ namespace cutrialdive {
     /// @brief Performs trial factoring according to given options
     /// @param opts trial factoring options
     void trial_factor(
-        mode_flag modeFlag,
+        num_seq_id numSeqId,
         trial_factoring_options const & opts
     )
     {
@@ -168,7 +169,7 @@ namespace cutrialdive {
         {
             timer tfTimer{"Trial factoring took ", std::cout};
             
-            dispatch_mode<decltype(opts.n0)>(modeFlag, [&]<typename Seq>() {
+            dispatch_num_seq<decltype(opts.n0)>(numSeqId, [&]<typename Seq>() {
                 trial_factor<Seq>(opts, results);
             });
         }

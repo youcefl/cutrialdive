@@ -48,16 +48,16 @@ namespace {
 
     template <typename ExceptionBuilder>
     inline
-    void parse_mode(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    void parse_num_seq(command_line_options & options, char**& argv, ExceptionBuilder buildException)
     {
-        if(!eat_valued_option<std::string>("--mode", argv, buildException, [&](auto modeAsStr) {
+        if(!eat_valued_option<std::string>("--num-seq", argv, buildException, [&](auto numSeqIdAsStr) {
                 try {
-                    options.mode = mode_from_string(modeAsStr);
+                    options.num_seq_id_value = num_seq_id_from_string(numSeqIdAsStr);
                 } catch (std::exception const & ex) {
                     throw buildException(ex.what());
                 }
             })) {
-           throw buildException("Invalid command line, option --mode must come first");
+           throw buildException("Invalid command line, option --num-seq must come first");
         }
     }
 }
@@ -102,7 +102,7 @@ namespace cutrialdive {
         trial_factoring_options tfOptions{};
         options_ = command_line_options{};
         auto buildException = [](auto msg){ return command_line_parse_exception{msg}; };
-        parse_mode(*options_, ppargv, buildException);
+        parse_num_seq(*options_, ppargv, buildException);
 
         bool haveStart{}, haveEnd{}, haveTfBits{}, haveTfStart{}, haveTfEnd{};
         for(; *ppargv; ++ppargv) {
@@ -180,18 +180,19 @@ namespace cutrialdive {
         out << R"-(
   cutrialdive ( --version
               | ( -h | --help )
-              | ( --mode <MODE> ( --print n
-                                | --print-expression n 
-                                | -s n0 [-e n1] ( --tf-bits bits_count 
-                                                | --tf-start f0 --tf-end f1 )
-                                        [--output <output_path>]
+              | ( --num-seq <NUM_SEQ_ID>
+                        ( --print n
+                        | --print-expression n 
+                        | -s n0 [-e n1] ( --tf-bits bits_count 
+                                        | --tf-start f0 --tf-end f1 )
+                          [--output <output_path>]
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
-R"-(                                | --single-prp n [--factors "f_1, ..., f_m"
-                                                      [--no-boost-factors]]
+R"-(                        | --single-prp n [--factors "f_1, ..., f_m"
+                                                [--no-boost-factors]]
 )-"
 #endif // CUTRIALDIVE_ENABLE_PRP
-R"-(                                )
+R"-(                        )
                 )
               )
 )-"
@@ -217,11 +218,11 @@ R"-(                                )
     --version
             prints the version number and exits.
     
-    Mode selection
-    --------------
-    --mode <MODE>
-            Select a mode, possible values of <MODE> are: smarandache,
-            mersenne.
+    Number sequence selection
+    -------------------------
+    --num-seq <NUM_SEQ_ID>
+            Selects a number sequence to work on, possible values of
+            <NUM_SEQ_ID> are: smarandache, mersenne.
 
     Print number
     ------------

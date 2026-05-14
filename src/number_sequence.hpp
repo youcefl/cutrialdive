@@ -5,7 +5,7 @@
 #pragma once
 
 #include <ostream>
-#include "mode_flag.hpp"
+#include "num_seq_id.hpp"
 
 namespace cutrialdive {
 
@@ -61,7 +61,7 @@ namespace cutrialdive {
         ) } -> std::same_as<typename Seq::residue_type>;
     };
 
-    template <mode_flag flag>
+    template <num_seq_id numSeqId>
     struct number_sequence;
 }
 

@@ -4,7 +4,7 @@
 */
 #pragma once
 
-#include "mode.hpp"
+#include "num_seq_id.hpp"
 #include "trial_factoring_options.hpp"
 
 namespace cutrialdive {
@@ -12,7 +12,7 @@ namespace cutrialdive {
     /// @brief Performs trial factoring according to given options
     /// @param opts trial factoring options
     void trial_factor(
-        mode_flag modeFlag,
+        num_seq_id numSeqId,
         trial_factoring_options const & opts
     );
 

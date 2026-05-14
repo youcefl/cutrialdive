@@ -9,7 +9,7 @@
 
 #include "trial_factoring_options.hpp"
 #include "factor.hpp"
-#include "mode.hpp"
+#include "num_seq_id.hpp"
 
 namespace cutrialdive {
 
@@ -19,7 +19,7 @@ namespace cutrialdive {
 
     struct command_line_options
     {
-        mode_flag mode;
+        num_seq_id num_seq_id_value;
         bool wants_value;
         bool wants_expression;
         uint64_t n;

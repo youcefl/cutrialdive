@@ -8,19 +8,20 @@
 #include <vector>
 #include <algorithm>
 
-#include "mode_flag.hpp"
+#include "num_seq_id.hpp"
 #include "factor.hpp"
 
 
 namespace cutrialdive {
 
     void run_prp_test(
-        mode_flag modeFlag,
+        num_seq_id numSeqId,
         uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,
         std::ostream & out
     );
+
     /// @brief Computes the cofactor by dividing @param number by the product of provided @param factors
     /// @tparam NumT Number type
     /// @tparam FactorT Factor type

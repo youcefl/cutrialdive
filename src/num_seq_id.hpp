@@ -4,26 +4,31 @@
 */
 #pragma once
 
+#include <string>
+
 namespace cutrialdive {
 
-    /// Available modes
-    enum class mode_flag {
+    /// Available number sequence ids
+    enum class num_seq_id {
         mersenne,
         smarandache
     };
 
     template <typename StrT>
-    StrT to_string(mode_flag modeFlag);
+    StrT to_string(num_seq_id numSeqId);
+
+    /// @brief Returns the number sequence id as a num_seq_id value
+    num_seq_id num_seq_id_from_string(std::string const & numSeqIdAsStr);
 }
 
 namespace cutrialdive {
 
     template <typename StrT>
-    StrT to_string(mode_flag modeFlag)
+    StrT to_string(num_seq_id numSeqId)
     {
-        switch(modeFlag) {
-            case mode_flag::mersenne: return {"mersenne"};
-            case mode_flag::smarandache: return {"smarandache"};
+        switch(numSeqId) {
+            case num_seq_id::mersenne: return {"mersenne"};
+            case num_seq_id::smarandache: return {"smarandache"};
             //default: "unknown";
         }
     }
