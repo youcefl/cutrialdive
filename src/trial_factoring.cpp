@@ -3,7 +3,7 @@
 * Copyright (c) Youcef Lemsafer
 */
 #include "trial_factoring.hpp"
-#ifdef CUTRIALDIVE_HAS_GPU
+#ifdef CUTRIALDIVE_ENABLE_GPU
 #include "trial_factoring.cuh"
 #endif
 #include <iostream>
@@ -134,7 +134,7 @@ namespace cutrialdive {
         } else {
             read_previous_results(opts.n0, opts.n1, previous_results);
         }
-#ifdef CUTRIALDIVE_HAS_GPU
+#ifdef CUTRIALDIVE_ENABLE_GPU
         device_trial_factor<NumberSequenceT>(opts, previous_results);
 #else
         do_trial_factor<NumberSequenceT>(opts, previous_results);

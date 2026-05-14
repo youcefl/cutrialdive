@@ -23,9 +23,11 @@ namespace cutrialdive {
         bool wants_value;
         bool wants_expression;
         uint64_t n;
+#ifdef CUTRIALDIVE_ENABLE_PRP 
         bool wants_single_prp;
         bool wants_boosted_factors{true};
         std::vector<factor<uint64_t, uint32_t>> factors;
+#endif
         std::optional<trial_factoring_options> tf_options;
     };
     

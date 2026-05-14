@@ -118,6 +118,7 @@ namespace cutrialdive {
             })){
                 return;
             }
+#ifdef CUTRIALDIVE_ENABLE_PRP
             if(eat_valued_option<uint64_t>("--single-prp", ppargv, buildException, [this](auto n) {
                 options_->wants_single_prp = true;
                 options_->n = n;
@@ -131,6 +132,7 @@ namespace cutrialdive {
                 }
                 return;
             }
+#endif // CUTRIALDIVE_ENABLE_PRP
             haveStart = haveStart || eat_valued_option<uint64_t>("-s", ppargv, buildException,
                                         [&tfOptions](auto n0){ tfOptions.n0 = n0; });
             haveEnd =  haveEnd || eat_valued_option<uint64_t>("-e", ppargv, buildException,
@@ -183,11 +185,17 @@ namespace cutrialdive {
                                 | -s n0 [-e n1] ( --tf-bits bits_count 
                                                 | --tf-start f0 --tf-end f1 )
                                         [--output <output_path>]
-                                | --single-prp n [--factors "f_1, ..., f_m"
+)-"
+#ifdef CUTRIALDIVE_ENABLE_PRP
+R"-(                                | --single-prp n [--factors "f_1, ..., f_m"
                                                       [--no-boost-factors]]
-                                )
-                ))
-)-";
+)-"
+#endif // CUTRIALDIVE_ENABLE_PRP
+R"-(                                )
+                )
+              )
+)-"
+        ;
     }
 
     void print_usage(std::ostream & out)
@@ -195,7 +203,7 @@ namespace cutrialdive {
         print_usage_only(out);
         out << R"-(
 
-  Type cutrialdive --help for more.
+  Type 'cutrialdive --help' for more.
 )-";
     }
 
@@ -224,7 +232,6 @@ namespace cutrialdive {
             prints an expression whose evaluation yields S(n). For example
             "--mode mersenne --print-expression 7" will output 2^7-1.
 
-
     Trial factoring
     ---------------
     Use options -s and -e to specify the range of indices [n0, n1[:
@@ -250,7 +257,9 @@ namespace cutrialdive {
 
     --output <path>
             Causes the output to be written to the given path
-
+)-"
+#ifdef CUTRIALDIVE_ENABLE_PRP
+R"-(
     PRP test
     --------
     --single-prp n
@@ -276,8 +285,11 @@ namespace cutrialdive {
             This ensures that the cofactor used for the PRP test is not
             divisible by any of the given primes.
             This option disables that behavior.
-)-";
-}
+)-"
+#endif // CUTRIALDIVE_ENABLE_PRP
+R"-(
+)-"        ;
+    }
 
 }
 

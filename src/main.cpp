@@ -6,7 +6,9 @@
 #include <iostream>
 #include <stdexcept>
 
+#ifdef CUTRIALDIVE_ENABLE_PRP
 #include "prp.hpp"
+#endif
 #include "number_sequence.hpp"
 #include "builtin_number_sequences.hpp"
 #include "trial_factoring.hpp"
@@ -63,10 +65,12 @@ int main(int argc, char** argv)
         if(options.wants_expression) {
             return print_expression(options.mode, options.n, std::cout);
         }
+#ifdef CUTRIALDIVE_ENABLE_PRP
         if(options.wants_single_prp) {
             run_prp_test(options.mode, options.n, options.factors, options.wants_boosted_factors, std::cout);
             return 0;
         }
+#endif
         trial_factor(options.mode, *options.tf_options);
     } catch(std::exception const & e) {
         std::cerr << e.what() << std::endl;

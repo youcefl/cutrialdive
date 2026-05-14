@@ -34,7 +34,7 @@ namespace cutrialdive {
         return output_range(out, std::begin(vec), std::end(vec));
     }
 
-#ifdef CUTRIALDIVE_HAS_GPU
+#ifdef CUTRIALDIVE_ENABLE_GPU
     // Tests reciprocal on the device
     __global__
     void treciprocal()
@@ -129,7 +129,7 @@ namespace cutrialdive {
         }
     }
 
-#endif // CUTRIALDIVE_HAS_GPU
+#endif // CUTRIALDIVE_ENABLE_GPU
 
     int autotest()
     {
@@ -344,7 +344,7 @@ namespace cutrialdive {
                     std::cerr << "  Actual: "; output_range(std::cerr, primes); std::cerr << std::endl;
                 }
             }
-#ifdef CUTRIALDIVE_HAS_GPU
+#ifdef CUTRIALDIVE_ENABLE_GPU
             {
                 treciprocal<<<1, 1>>>();
                 cudaDeviceSynchronize();
@@ -357,7 +357,7 @@ namespace cutrialdive {
                 tmodnby1<<<1, 1>>>();
                 cudaDeviceSynchronize();
             }
-#endif // CUTRIALDIVE_HAS_GPU
+#endif // CUTRIALDIVE_ENABLE_GPU
             std::cout << "Done" << std::endl;
             return 0;
     }

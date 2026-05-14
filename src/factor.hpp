@@ -4,6 +4,7 @@
 */
 #pragma once
 
+#include <span>
 #include <stdexcept>
 #include <vector>
 #include <string>
@@ -74,7 +75,7 @@ namespace cutrialdive {
         std::vector<factor<PrimeT, ExponentT>> factors;
         constexpr auto delim{","sv};
         for (auto word : std::string_view{factors_str} | std::views::split(',')) {
-            auto factor_str = std::string_view(word);
+            auto factor_str = std::string_view(word.data(), word.size());
             auto start = factor_str.find(' ');
             if(start != std::string_view::npos) {
                 factor_str.remove_prefix(start);
