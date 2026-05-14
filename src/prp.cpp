@@ -3,6 +3,9 @@
  * 2023.01.19
  */
 #include "prp.hpp"
+
+#include <iostream>
+
 #include "hgint.hpp"
 #include "gw_utility.h"
 #include "number_sequence.hpp"
