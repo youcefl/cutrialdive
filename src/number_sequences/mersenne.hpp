@@ -22,7 +22,7 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
-        using barrett_mu_type = barrett_mu64_t;
+        using barrett_mu_type = no_barrett_t;
 
         static char const* short_name();
         static value_type value(index_type n);
@@ -74,35 +74,6 @@ namespace cutrialdive {
         return n > 0;
     }
 
-
-    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod(
-        uint64_t v_n_mod_p,
-        uint64_t n,
-        uint64_t d
-    )
-    {
-        (void)n; // unused
-        // M(n+1) = 2 * M(n) + 1
-        return ((__uint128_t(v_n_mod_p) << 1) + 1) % d;
-    }
-
-    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod_mu(
-        uint64_t v_n_mod_p,
-        uint64_t n,
-        uint64_t p,
-        uint64_t mu_p
-    )
-    {
-        (void)n; // unused
-        // M(n+1) = 2 * M(n) + 1
-        auto a = (__uint128_t(v_n_mod_p) << 1) + 1;
-        auto q = (a * mu_p) >> 64;
-        auto r =  a - q * p;
-        return r >= p ? r - p : r;
-    }
-
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
     uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod_2(
         uint64_t v_n_mod_p,
@@ -114,4 +85,20 @@ namespace cutrialdive {
         return 1;
     }
 
+
+    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
+    uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod(
+        uint64_t v_n_mod_d,
+        uint64_t n,
+        uint64_t d
+    )
+    {
+        (void)n; // unused
+        // M(n+1) = 2 * M(n) + 1
+        if(v_n_mod_d < d - v_n_mod_d) {
+            auto r  = (v_n_mod_d << 1) + 1;
+            return r == d ? 0 : r;
+        }
+        return v_n_mod_d - (d - v_n_mod_d) + 1;
+    }
 }

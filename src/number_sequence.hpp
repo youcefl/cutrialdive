@@ -35,8 +35,15 @@ namespace cutrialdive {
         // Returns S(n) mod 2
         { Seq::value_mod_2(std::declval<typename Seq::index_type>()) }
             -> std::same_as<typename Seq::residue_type>;
+
+        // Given S(n) mod 2 return S(n+1) mod 2
+        { Seq::next_value_mod_2(
+            std::declval<typename Seq::residue_type>(),
+            std::declval<typename Seq::index_type>()
+        ) } -> std::same_as<typename Seq::residue_type>;
         
         // Returns S(n+1) mod d given S(n) mod d, n and d
+        // d is guaranteed to be odd
         { Seq::next_value_mod(
             std::declval<typename Seq::residue_type>(), // S(n) mod d
             std::declval<typename Seq::index_type>(),   // n
@@ -52,12 +59,6 @@ namespace cutrialdive {
             std::declval<typename Seq::index_type>(),   // n
             std::declval<typename Seq::residue_type>(), // d
             std::declval<typename Seq::barrett_mu_type>()  // mu(d)
-        ) } -> std::same_as<typename Seq::residue_type>;
-
-        // Given S(n) mod 2 return S(n+1) mod 2
-        { Seq::next_value_mod_2(
-            std::declval<typename Seq::residue_type>(),
-            std::declval<typename Seq::index_type>()
         ) } -> std::same_as<typename Seq::residue_type>;
     };
 
