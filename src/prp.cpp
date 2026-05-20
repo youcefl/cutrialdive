@@ -40,6 +40,8 @@ namespace cutrialdive {
             timer t{(std::string{"Computing the cofactor of "}
                         + numberAsStr + " took ").c_str(), out};
             out << "Boosting factors: " << std::boolalpha << haveToBoostFactors << std::endl;
+            cofactor = haveToBoostFactors ? compute_cofactor_boosted(number, factors)
+                        : compute_cofactor_exact(number, factors);
             out << "Factors: ";
             char const * sep = "";
             std::for_each(std::begin(factors), std::end(factors), [&out, &sep](auto const & fact) {
@@ -47,8 +49,6 @@ namespace cutrialdive {
                 sep = ", ";
             });
             out << std::endl;
-            cofactor = haveToBoostFactors ? compute_cofactor_boosted(number, factors)
-                        : compute_cofactor_exact(number, factors);
         }
         {
             auto sizeInBase10 = cofactor.sizeInBase(10);
@@ -62,7 +62,7 @@ namespace cutrialdive {
 
 
     void run_prp_test(
-        num_seq_id numSeqId,
+        num_seq_spec numSeqSpec,
         uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,
@@ -71,7 +71,7 @@ namespace cutrialdive {
     {
         timer tfTimer{"PRP test took ", std::cout};
 
-        dispatch_num_seq<decltype(n)>(numSeqId, [&]<typename Seq>() {
+        dispatch_num_seq<decltype(n)>(numSeqSpec, [&]<typename Seq>() {
             run_prp_test<Seq>(n, factors, haveToBoostFactors, std::cout);
         });
     }

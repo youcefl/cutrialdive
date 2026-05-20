@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <iostream>
 #include <exception>
 #include <gmp.h>
 
@@ -42,6 +43,7 @@ public:
     HgInt & operator*=(uint64_t x);
     HgInt & operator/=(HgInt const& x);
     HgInt & operator/=(uint64_t x);
+    HgInt & operator<<=(uint64_t x);
     mpz_t const & get() const;
     mpz_t & get();
     mp_limb_t const * limbs() const;
@@ -51,6 +53,7 @@ public:
     uint64_t mod(uint64_t x) const;
     friend void div_mod(HgInt const & number, HgInt const & divisor, HgInt& quotient, HgInt& remainder);
     friend HgInt mod(HgInt x, uint64_t y);
+    friend std::string to_string(HgInt const & x);
 private:
     mpz_t val_;
 };
@@ -219,7 +222,6 @@ HgInt operator*(HgInt x, uint64_t y)
     return x *= y;
 }
 
-
 HGINT_INLINE
 HgInt & HgInt::operator/=(HgInt const& x)
 {
@@ -241,6 +243,18 @@ HGINT_INLINE
 HgInt operator/(HgInt x, uint64_t y)
 {
     return x /= y;
+}
+
+HGINT_INLINE
+HgInt & HgInt::operator<<=(uint64_t x)
+{
+    mpz_mul_2exp(val_, val_, x);
+    return *this;    
+}
+HGINT_INLINE
+HgInt operator<<(HgInt x, uint64_t y)
+{
+    return x <<= y;
 }
 
 HGINT_INLINE
@@ -267,3 +281,22 @@ HgInt mod(HgInt x, uint64_t y)
 {
     return HgInt{x.mod(y)};
 }
+
+HGINT_INLINE
+std::ostream&
+operator<<(std::ostream& os, HgInt const& hg) {
+    char* str = mpz_get_str(nullptr, 10, hg.get());
+    os << str;
+    free(str);
+    return os;
+}
+
+HGINT_INLINE
+std::string
+to_string(HgInt const& hg) {
+    char* str = mpz_get_str(nullptr, 10, hg.get());
+    std::string v{str};
+    free(str);
+    return v;
+}
+

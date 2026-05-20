@@ -62,7 +62,7 @@ namespace cutrialdive {
         ) } -> std::same_as<typename Seq::residue_type>;
     };
 
-    template <num_seq_id numSeqId>
+    template <num_seq_id numSeqId, auto... numSeqParams>
     struct number_sequence;
 }
 

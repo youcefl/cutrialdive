@@ -50,9 +50,19 @@ namespace {
     inline
     void parse_num_seq(command_line_options & options, char**& argv, ExceptionBuilder buildException)
     {
-        if(!eat_valued_option<std::string>("--num-seq", argv, buildException, [&](auto numSeqIdAsStr) {
+        if(!eat_valued_option<std::string>("--num-seq", argv, buildException, [&](auto numSeqSpec) {
                 try {
-                    options.num_seq_id_value = num_seq_id_from_string(numSeqIdAsStr);
+                    auto commaPos = numSeqSpec.find(',');
+                    if(commaPos != std::string::npos) {
+                        auto numSeqIdAsStr = numSeqSpec.substr(0, commaPos);
+                        options.num_seq_id_value = num_seq_id_from_string(numSeqIdAsStr);
+                        options.num_seq_params = numSeqSpec.substr(commaPos + 1);
+                        if(options.num_seq_params.empty()) {
+                            throw buildException("Invalid value for option --num-seq");
+                        }
+                    } else {
+                        options.num_seq_id_value = num_seq_id_from_string(numSeqSpec);
+                    }
                 } catch (std::exception const & ex) {
                     throw buildException(ex.what());
                 }
@@ -222,7 +232,8 @@ R"-(                        )
     -------------------------
     --num-seq <NUM_SEQ_ID>
             Selects a number sequence to work on, possible values of
-            <NUM_SEQ_ID> are: smarandache, mersenne.
+            <NUM_SEQ_ID> are: smarandache[,base], mersenne.
+            smarandache,2 means Smarandache base 2, default is base 10.
 
     Print number
     ------------

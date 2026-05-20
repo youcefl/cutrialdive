@@ -8,14 +8,14 @@
 #include <vector>
 #include <algorithm>
 
-#include "num_seq_id.hpp"
+#include "num_seq_spec.hpp"
 #include "factor.hpp"
 
 
 namespace cutrialdive {
 
     void run_prp_test(
-        num_seq_id numSeqId,
+        num_seq_spec numSeqSpec,
         uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,

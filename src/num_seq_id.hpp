@@ -5,6 +5,7 @@
 #pragma once
 
 #include <string>
+#include <stdexcept>
 
 namespace cutrialdive {
 
@@ -14,6 +15,7 @@ namespace cutrialdive {
         smarandache
     };
 
+    /// Returns a string
     template <typename StrT>
     StrT to_string(num_seq_id numSeqId);
 
@@ -22,6 +24,9 @@ namespace cutrialdive {
 }
 
 namespace cutrialdive {
+    namespace details {
+        std::runtime_error unexpected_num_seq_id_exception(num_seq_id numSeqId);
+    }
 
     template <typename StrT>
     StrT to_string(num_seq_id numSeqId)
@@ -29,8 +34,8 @@ namespace cutrialdive {
         switch(numSeqId) {
             case num_seq_id::mersenne: return {"mersenne"};
             case num_seq_id::smarandache: return {"smarandache"};
-            //default: "unknown";
         }
+        return "<unknown number sequence id>";
     }
 
 }

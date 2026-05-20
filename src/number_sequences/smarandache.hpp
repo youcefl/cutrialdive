@@ -19,6 +19,7 @@ namespace cutrialdive
     template <>
     struct number_sequence<num_seq_id::smarandache>
     {
+        static constexpr uint32_t base = 10;
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
@@ -34,7 +35,7 @@ namespace cutrialdive
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
         /// Computes the shift by which S(n) needs to be multiplied in order to append n+1
         /// e.g. S(9) * shift + 10 = S(10), shift is 100, so the returned value is simply
-        /// ceil(log10(n+1)).
+        /// ceil(log10(n + 1)).
         CUTRIALDIVE_DEVICE_AND_HOST static index_type compute_shift(index_type n);
     };
 }

@@ -10,17 +10,17 @@
 #include "prp.hpp"
 #endif
 #include "builtin_number_sequences.hpp"
+#include "num_seq_spec.hpp"
 #include "num_seq_dispatch.hpp"
 #include "trial_factoring.hpp"
 #include "autotests.hpp"
 
 namespace {
-
     using namespace cutrialdive;
 
     template <typename IndexT>
-    int print_value(num_seq_id numSeqId, IndexT n, std::ostream& out) {
-        return dispatch_num_seq<IndexT>(numSeqId, [&]<typename Seq>() {
+    int print_value(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
+        return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
             Seq::print_value(n, out);
             out << std::endl;
             return 0;
@@ -28,8 +28,8 @@ namespace {
     }
 
     template <typename IndexT>
-    int print_expression(num_seq_id numSeqId, IndexT n, std::ostream& out) {
-        return dispatch_num_seq<IndexT>(numSeqId, [&]<typename Seq>() {
+    int print_expression(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
+        return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
             Seq::print_expression(n, out);
             out << std::endl;
             return 0;
@@ -59,19 +59,25 @@ int main(int argc, char** argv)
             return ctd::autotest();
         }
         auto options = *parser.get_options();
+        auto numSeqSpec = num_seq_spec{options.num_seq_id_value, options.num_seq_params};
         if(options.wants_value) {
-            return print_value(options.num_seq_id_value, options.n, std::cout);
+            return print_value(numSeqSpec, options.n, std::cout);
         }
         if(options.wants_expression) {
-            return print_expression(options.num_seq_id_value, options.n, std::cout);
+            return print_expression(numSeqSpec, options.n, std::cout);
         }
 #ifdef CUTRIALDIVE_ENABLE_PRP
         if(options.wants_single_prp) {
-            run_prp_test(options.num_seq_id_value, options.n, options.factors, options.wants_boosted_factors, std::cout);
+            ctd::run_prp_test(numSeqSpec,
+                options.n,
+                options.factors,
+                options.wants_boosted_factors,
+                std::cout
+            );
             return 0;
         }
 #endif
-        trial_factor(options.num_seq_id_value, *options.tf_options);
+        ctd::trial_factor(numSeqSpec, *options.tf_options);
     } catch(std::exception const & e) {
         std::cerr << e.what() << std::endl;
         return 1;

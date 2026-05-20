@@ -5,6 +5,7 @@
 #pragma once
 
 #include <iostream>
+#include <string>
 #include <optional>
 
 #include "trial_factoring_options.hpp"
@@ -20,6 +21,7 @@ namespace cutrialdive {
     struct command_line_options
     {
         num_seq_id num_seq_id_value;
+        std::string num_seq_params;
         bool wants_value;
         bool wants_expression;
         uint64_t n;
