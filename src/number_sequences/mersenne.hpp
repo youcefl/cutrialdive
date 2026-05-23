@@ -15,9 +15,8 @@
 
 namespace cutrialdive {
 
-    // Mersenne numbers: 2^n-1, n integer > 0
-    template <>
-    struct number_sequence<num_seq_id::mersenne>
+    // Mersenne numbers, M(n) = 2^n - 1
+    struct mersenne
     {
         using index_type = uint64_t;
         using value_type = HgInt;
@@ -39,35 +38,34 @@ namespace cutrialdive {
 
     inline
     char const*
-    number_sequence<num_seq_id::mersenne>::short_name()
+    mersenne::short_name()
     {
         return "M";
     }
 
     inline
-    typename number_sequence<num_seq_id::mersenne>::value_type
-    number_sequence<num_seq_id::mersenne>::value(index_type n)
+    typename mersenne::value_type
+    mersenne::value(index_type n)
     {
         return pow(value_type{2}, n) - 1;
     }
 
     inline
     void
-    number_sequence<num_seq_id::mersenne>::print_value(index_type n, std::ostream & out)
+    mersenne::print_value(index_type n, std::ostream & out)
     {
-        //@todo: operator<<(std::ostream&) for HgInt
-        out << "not implemented yet";
+        out << value(n);
     }
 
     inline
     void
-    number_sequence<num_seq_id::mersenne>::print_expression(index_type n, std::ostream & out)
+    mersenne::print_expression(index_type n, std::ostream & out)
     {
         out << "2^" << n << "-1";
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<num_seq_id::mersenne>::value_mod_2(
+    uint64_t mersenne::value_mod_2(
         uint64_t n
     )
     {
@@ -75,7 +73,7 @@ namespace cutrialdive {
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod_2(
+    uint64_t mersenne::next_value_mod_2(
         uint64_t v_n_mod_p,
         uint64_t n
     )
@@ -87,7 +85,7 @@ namespace cutrialdive {
 
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t number_sequence<num_seq_id::mersenne>::next_value_mod(
+    uint64_t mersenne::next_value_mod(
         uint64_t v_n_mod_d,
         uint64_t n,
         uint64_t d

@@ -61,8 +61,5 @@ namespace cutrialdive {
             std::declval<typename Seq::barrett_mu_type>()  // mu(d)
         ) } -> std::same_as<typename Seq::residue_type>;
     };
-
-    template <num_seq_id numSeqId, auto... numSeqParams>
-    struct number_sequence;
 }
 

@@ -6,6 +6,8 @@
 
 #include <vector>
 #include <cstdint>
+#include <cstddef>
+#include <bit>
 
 #include "common_defines.h"
 
@@ -54,6 +56,15 @@ namespace cutrialdive {
     /// Returns the high 128 bits of the 256 bits product of two 128 bit integers,
     /// in english: returns (a * b) / 2^128.
     CUTRIALDIVE_DEVICE __uint128_t mul128hi(__uint128_t a, __uint128_t b);
+
+    template <size_t Base, typename ValueT>
+    CUTRIALDIVE_DEVICE_AND_HOST size_t digits_in_base(ValueT n);
+
+    template <typename ValueT>
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST size_t bit_length(ValueT n);
 }
 
 
@@ -237,5 +248,42 @@ namespace cutrialdive {
         __uint128_t mid = lmid + __uint128_t{a1} * b0;
         uint32_t carry = (mid < lmid) ? 1 : 0;
         return __uint128_t{a1} * b1 + carry + (mid >> 64);
+    }
+
+    template <typename ValueT>
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST size_t bit_length(ValueT n)
+    {
+#if CUTRIALDIVE_IS_CUDA
+        return sizeof(ValueT) * 8 - __clzll(n);
+#else
+        return std::bit_width(n);
+#endif
+    }
+
+    template <size_t Base, typename ValueT>
+    inline
+    CUTRIALDIVE_DEVICE_AND_HOST size_t digits_in_base(ValueT n)
+    {
+        static_assert(Base > 1, "Base cannot be smaller than 2");
+        if constexpr((Base <= 32) && !((Base - 1) & Base)) {
+            // When Base is in {2, 4, 8, 16, 32}
+#if CUTRIALDIVE_IS_CUDA
+            const
+#else
+            constexpr
+#endif
+            auto bitsPerDigit = bit_length(Base) - 1;
+            return (bit_length(n) + bitsPerDigit - 1) / bitsPerDigit;
+        } else {
+            // Other bases
+            size_t res{1};
+            for(; n /= Base; ++res);
+            return res;
+        }
     }
 }

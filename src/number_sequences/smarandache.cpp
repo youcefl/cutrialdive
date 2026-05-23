@@ -1,133 +1,229 @@
 /*
- * Creation date: 2026.04.21
- * Created by Youcef Lemsafer
- */
+* Created on 2026.04.21
+* Copyright (c) Youcef Lemsafer
+*/
 #include "smarandache.hpp"
 
-#include <cstdint>
-#include <algorithm>
-#include <ostream>
-#include <array>
-#include <functional>
+#include <string>
+#include <sstream>
+#include <limits>
 
-#include "hgint.hpp"
+#include "lazy_init_array.hpp"
 
 
-namespace cutrialdive
-{
-    namespace details {
-        template <typename T>
-        inline auto floor_log10(T n)
+namespace cutrialdive {
+
+    namespace {
+
+        template <uint64_t base>
+        std::vector<uint64_t> const & powers_of()
         {
-            auto log10n = 0;
-            for(T d{1}; (d *= 10) <= n;) {
-                ++log10n;
-            }
-            return log10n;
+            static auto const result = []() {
+                std::vector<uint64_t> powersOfBase{1};
+                for(auto e = base; ;) {
+                    if(e > ~uint64_t{} / base) {
+                        break;
+                    }
+                    powersOfBase.push_back(e);
+                    e *= base;
+                }
+                return powersOfBase;
+            }();
+            return result;
         }
-    }
 
-    /// @brief Returns Sm(n) = 1234567...n
-    /// @tparam NumberT number type
-    /// @param n 
-    template <typename T>
-    T smarandache(uint64_t n)
-    {
-        if(n <= 1) {
-            return T{n};
+        template <uint64_t base, typename ValueT>
+        ValueT compute_c_k(uint64_t k)
+        {
+            using IntT = typename smarandache<base>::value_type;
+            using IndexT = typename smarandache<base>::index_type;
+            constexpr auto indexBits = std::numeric_limits<IndexT>::digits;
+
+            // Since k is floor(logb(n)), k < logb(2^indexBits) (where logb is the base b logarithm)
+            // so the max value is indexBits - 1 (reached when base = 2), we could do better
+            // when base > 2 (e.g. if base = 4 the max is actually indexBits / 2 - 1) but is it worth it?
+            constexpr auto MAX_PRECOMPUTED_CONSTANTS = indexBits;
+            static lazy_init_array<ValueT, MAX_PRECOMPUTED_CONSTANTS> constants{
+                [](){
+                    if constexpr(std::is_same_v<std::string, ValueT>) {
+                        return to_string(base);
+                    } else {
+                        return ValueT{base};
+                    }
+                }(),
+                [](ValueT const & predecessor, size_t i){
+
+                // Remembering the following may ease the pain
+                // C_i = (C_{i - 1}*b^((b - 1)*i*b^(i - 1))
+                //       - (b^i - 1)^2
+                //       - b^i
+                //       )/(b^i - 1)^2
+                //       *(b^(i + 1) - 1)^2 + b^(2*i + 1) - b^i + 1
+                if constexpr(std::is_same_v<std::string, ValueT>) {
+                    static const auto b = to_string(base);
+                    auto b_to_i = b + "^" + std::to_string(i);
+                    auto b_to_i_plus_1 = b + "^" + std::to_string(i + 1);
+                    auto b_to_two_i_plus_1 = b + "^" + std::to_string(2*i + 1);
+                    return "((" + predecessor + ")*" + b + "^" 
+                                    + to_string((base - 1) * i * pow(IntT{base}, i - 1))
+                                    + " - (" + b_to_i + " - 1)^2 - " + b_to_i
+                            + ")/(" + b_to_i
+                                + " - 1)^2*(" + b_to_i_plus_1 + " - 1)^2 + "
+                                + b_to_two_i_plus_1 + " - " + b_to_i + " + 1";
+                } else {
+                    if(i >= 1 + powers_of<base>().size()) {
+                        std::ostringstream ostr;
+                        ostr << "While computing C_" << i << " for Smarandache base " 
+                                << base << ", the value " << base << "^" << i 
+                                << " which does not fit in 64 bits was requested";
+                        throw std::runtime_error{ostr.str()};
+                    }
+                    constexpr auto b = base;
+                    auto b_to_i = pow(IntT{b}, i);
+                    auto b_to_i_minus_1_squared = pow(b_to_i - 1, 2);
+                    return (predecessor * pow(pow(b_to_i, (b - 1)), powers_of<base>()[i - 1]) - b_to_i_minus_1_squared - b_to_i)
+                            / b_to_i_minus_1_squared
+                            * pow(b_to_i*b - 1, 2)
+                            + pow(b_to_i, 2)*b - b_to_i + 1;
+                }
+            }};
+            return constants[k];
         }
-        auto log10n = details::floor_log10(n);
-        static const auto c3 = T{1490840987654358ull} * pow(T{10}, 180) - T{10990220};
-        static const auto c4 = pow(T{10}, 2701) * c3 * T{10201} - T{1109890222000ull};
-        static const auto c5 = pow(T{10}, 36000) * c4 * T{123454321} - T{123443211358} * pow(T{33300}, 2);
-        static const std::array<std::function<T(uint64_t)>, 5> sm = {
-              [](auto x) { return (pow(T{10}, x + 1) - T{9 * x + 10}) / T{81}; }
-            , [](auto x) { return (pow(T{10}, 2*x - 18) * T{uint64_t(123456789)*99*99 + 991} 
-                                                    - T{99 * x + 100}) / T{9801}; }
-            , [&](auto x) { return (c3 * pow(T{10}, 3*x - 296) - T{120879* x + 121000}) 
-                                            / T{120758121}; }
-            , [&](auto x) { return (c4 * pow(T{10}, 4*(x - 999)) - T{12321} * T{ 9999*x + 10000 }) 
-                                            / T{1231853592321ull}; }
-            , [&](auto x) { return (c5 * pow(T{10}, 5*(x - 9999)) - T{12321} * T{1234321} * (T{99999} * T{x} + T{100000})) 
-                                            / (T{12321} * T{1234321} * T{99999} * T{99999}); }
-            };
-        if(log10n < sm.size()) {
-            return sm[log10n](n);
+
+        template <uint64_t base>
+        uint64_t logb(uint64_t n)
+        {
+            uint64_t res{};
+            for(; n /= base; ++res);
+            return res;
+        }
+
+    } // anonymous namespace
+
+    template <uint64_t Base>
+    char const* smarandache<Base>::short_name()
+    {
+        if constexpr (base == 10) {
+            return "Sm";
         } else {
-            throw std::runtime_error{"smarandache(n) for n >= 10^5 not supported yet"};
+            static const auto name = std::string{"Sm"} + to_string(base);
+            return name.c_str();
         }
     }
 
-    /// @brief Outputs Sm(n)
-    /// @param[in] n indice
-    /// @param[in,out] out the output stream
-    /// @return output stream
-    std::ostream &output_smarandache(uint64_t n, std::ostream &out)
+    template <uint64_t Base>
+    void smarandache<Base>::print_value(index_type n, std::ostream & out)
     {
-        if(!n) {
-            out << "0";
-            return out;
+        out << value(n);
+    }
+
+    template <uint64_t Base>
+    typename smarandache<Base>::value_type
+    smarandache<Base>::value(index_type n)
+    {
+        if(n < 2) {
+            return n;
         }
-        for(decltype(n) i = 1; i <= n; ++i) {
-            out << i;
+        auto k = logb<base>(n);
+        auto c_k = compute_c_k<base, value_type>(k);
+        // b being the base, recall that
+        // Smb(n) = (C_k*b^((k + 1)*(n - b^k + 1))
+        //          - (b^(k + 1) - 1)*n
+        //          - b^(k + 1)
+        //          )/(b^(k + 1) - 1)^2
+        if constexpr(std::has_single_bit(base)) {
+            // When base is a power of 2
+            constexpr auto shift_multiplier = floor_log2_base;
+            return ((c_k << (shift_multiplier*(k + 1)*(n - (1 << (shift_multiplier * k)) + 1)))
+                    - ((1 << (shift_multiplier * k)) - 1)*n
+                    - ((1 << (shift_multiplier * k)) << shift_multiplier)
+                    )/pow(((1 << (shift_multiplier * k)) << shift_multiplier) - 1, 2);
+        } else {
+            static const auto b = value_type{base};
+            auto b_to_k_plus_one = pow(b, k + 1);
+            return ((c_k*pow(b_to_k_plus_one, n - powers_of<base>()[k] + 1))
+                    - (b_to_k_plus_one - 1)*n
+                    - b_to_k_plus_one
+                   )/pow(b_to_k_plus_one - 1, 2);
         }
-        return out;
     }
 
-    /// @brief Outputs Sm(n) as an expression
-    /// @param[in/out] out the output stream
-    /// @param[in] n indice
-    /// @return output stream
-    std::ostream &output_smarandache_expression(uint64_t n, std::ostream &out)
+    template <uint64_t Base>
+    void smarandache<Base>::print_expression(index_type n, std::ostream & out)
     {
-        if(n <= 1) {
-            return out << n;
+        if(n < 2) {
+            out << n;
+            return;
         }
-        auto log10n = details::floor_log10(n);
-        static const auto c3 = std::string{"1490840987654358*10^180-10990220"};
-        static const auto c4 = std::string{"10^2701*("} + c3 + ")*10201-1109890222000";
-        static const auto c5 = std::string{"10^36000*("} + c4 + ")*123454321-123443211358*33300^2";
-        static const std::array<std::function<std::string(std::string)>, 5> sm = {
-            [](auto x) { return std::string{"(10^("} + x + "+1)"
-                                        + "-(9*" + x + "+10))/81"; }
-          , [](auto x) { return std::string{"(10^(2*"} + x + "-18)*(123456789*99^2+991)"
-                            "-(99*" + x + "+100))/9801"; }
-          , [](auto x) { return std::string{"(("} + c3 + ")*10^(3*" + x + "-296)"
-                            "-(120879*" + x + "+121000))/120758121"; }
-          , [](auto x) { return std::string{"(("} + c4 + ")*10^(4*(" + x + "-999))"
-                            "-12321*(9999*" + x + "+10000))/1231853592321"; }
-          
-          , [](auto x) { return std::string{"(("} + c5 + ")*10^(5*(" + x + "-9999))"
-                                              "-12321*1234321*(99999*" + x + "+100000))"
-                                            "/(12321*1234321*99999^2)"; }
-        };
-        if(log10n < sm.size()) {
-            return out << sm[log10n](std::to_string(n));
-        }
-        throw std::runtime_error{"smarandache(n) for n >= 10^5 not supported yet"};
+        auto k = logb<base>(n);
+        auto c_k = compute_c_k<base, std::string>(k);
+        out << "((" << c_k << ")*" << base << "^" << (value_type{k + 1} * (n - powers_of<base>()[k] + 1))
+            << " - (" << base << "^" << (k + 1) << " - 1)*" << n << " - " << base << "^" << (k + 1)
+            << ")/(" << base << "^" << (k + 1) << " - 1)^2";
     }
 
-    char const*
-    number_sequence<num_seq_id::smarandache>::short_name()
-    {
-        return "Sm";
-    }
-
-    typename number_sequence<num_seq_id::smarandache>::value_type
-    number_sequence<num_seq_id::smarandache>::value(index_type n)
-    {
-        return smarandache<value_type>(n);
-    }
-
-    void
-    number_sequence<num_seq_id::smarandache>::print_value(index_type n, std::ostream & out)
-    {
-        output_smarandache(n, out);
-    }
-
-    void
-    number_sequence<num_seq_id::smarandache>::print_expression(index_type n, std::ostream & out)
-    {
-        output_smarandache_expression(n, out);
-    }
+    template struct smarandache<2>;
+    template struct smarandache<3>;
+    template struct smarandache<4>;
+    template struct smarandache<5>;
+    template struct smarandache<6>;
+    template struct smarandache<7>;
+    template struct smarandache<8>;
+    template struct smarandache<9>;
+    template struct smarandache<10>;
+    template struct smarandache<11>;
+    template struct smarandache<12>;
+    template struct smarandache<13>;
+    template struct smarandache<14>;
+    template struct smarandache<15>;
+    template struct smarandache<16>;
+    template struct smarandache<17>;
+    template struct smarandache<18>;
+    template struct smarandache<19>;
+    template struct smarandache<20>;
+    template struct smarandache<21>;
+    template struct smarandache<22>;
+    template struct smarandache<23>;
+    template struct smarandache<24>;
+    template struct smarandache<25>;
+    template struct smarandache<26>;
+    template struct smarandache<27>;
+    template struct smarandache<28>;
+    template struct smarandache<29>;
+    template struct smarandache<30>;
+    template struct smarandache<31>;
+    template struct smarandache<32>;
+    template struct smarandache<33>;
+    template struct smarandache<34>;
+    template struct smarandache<35>;
+    template struct smarandache<36>;
+    template struct smarandache<37>;
+    template struct smarandache<38>;
+    template struct smarandache<39>;
+    template struct smarandache<40>;
+    template struct smarandache<41>;
+    template struct smarandache<42>;
+    template struct smarandache<43>;
+    template struct smarandache<44>;
+    template struct smarandache<45>;
+    template struct smarandache<46>;
+    template struct smarandache<47>;
+    template struct smarandache<48>;
+    template struct smarandache<49>;
+    template struct smarandache<50>;
+    template struct smarandache<51>;
+    template struct smarandache<52>;
+    template struct smarandache<53>;
+    template struct smarandache<54>;
+    template struct smarandache<55>;
+    template struct smarandache<56>;
+    template struct smarandache<57>;
+    template struct smarandache<58>;
+    template struct smarandache<59>;
+    template struct smarandache<60>;
+    template struct smarandache<61>;
+    template struct smarandache<62>;
+    template struct smarandache<63>;
+    template struct smarandache<64>;
 }
+
