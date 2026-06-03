@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <limits>
+#include <algorithm>
 
 #include "lazy_init_array.hpp"
 
@@ -61,10 +62,16 @@ namespace cutrialdive {
                 //       *(b^(i + 1) - 1)^2 + b^(2*i + 1) - b^i + 1
                 if constexpr(std::is_same_v<std::string, ValueT>) {
                     static const auto b = to_string(base);
-                    auto b_to_i = b + "^" + std::to_string(i);
+                    auto b_to_i = (i != 1) ? b + "^" + std::to_string(i) : b;
                     auto b_to_i_plus_1 = b + "^" + std::to_string(i + 1);
                     auto b_to_two_i_plus_1 = b + "^" + std::to_string(2*i + 1);
-                    return "((" + predecessor + ")*" + b + "^" 
+                    auto pred_par = std::any_of(std::begin(predecessor), std::end(predecessor),
+                        [](auto x){
+                            return (x < '0') || (x > '9');
+                        }) ? std::to_array<std::string>({"(", ")"})
+                           : std::to_array<std::string>({"", ""});
+
+                    return "("  + pred_par[0] + predecessor + pred_par[1] + "*" + b + "^" 
                                     + to_string((base - 1) * i * pow(IntT{base}, i - 1))
                                     + " - (" + b_to_i + " - 1)^2 - " + b_to_i
                             + ")/(" + b_to_i
@@ -112,9 +119,9 @@ namespace cutrialdive {
     }
 
     template <uint64_t Base>
-    void smarandache<Base>::print_value(index_type n, std::ostream & out)
+    std::ostream & smarandache<Base>::print_value(index_type n, std::ostream & out)
     {
-        out << value(n);
+        return out << value(n);
     }
 
     template <uint64_t Base>
@@ -135,7 +142,7 @@ namespace cutrialdive {
             // When base is a power of 2
             constexpr auto shift_multiplier = floor_log2_base;
             return ((c_k << (shift_multiplier*(k + 1)*(n - (1 << (shift_multiplier * k)) + 1)))
-                    - ((1 << (shift_multiplier * k)) - 1)*n
+                    - (((1 << (shift_multiplier * k)) << shift_multiplier) - 1)*n
                     - ((1 << (shift_multiplier * k)) << shift_multiplier)
                     )/pow(((1 << (shift_multiplier * k)) << shift_multiplier) - 1, 2);
         } else {
@@ -149,17 +156,25 @@ namespace cutrialdive {
     }
 
     template <uint64_t Base>
-    void smarandache<Base>::print_expression(index_type n, std::ostream & out)
+    std::ostream & smarandache<Base>::print_expression(index_type n, std::ostream & out)
     {
         if(n < 2) {
-            out << n;
-            return;
+            return out << n;
         }
         auto k = logb<base>(n);
         auto c_k = compute_c_k<base, std::string>(k);
-        out << "((" << c_k << ")*" << base << "^" << (value_type{k + 1} * (n - powers_of<base>()[k] + 1))
-            << " - (" << base << "^" << (k + 1) << " - 1)*" << n << " - " << base << "^" << (k + 1)
-            << ")/(" << base << "^" << (k + 1) << " - 1)^2";
+        if(std::any_of(std::begin(c_k), std::end(c_k), [](auto x){
+            return (x < '0') || (x > '9');
+        })) {
+            c_k = "(" + c_k + ")";
+        }
+        auto base_to_k_plus_1 = (k == 0)
+                                ? to_string(base) 
+                                : to_string(base) + "^" + to_string(k + 1);
+        out << "(" << c_k << "*" << base << "^" << (value_type{k + 1} * (n - powers_of<base>()[k] + 1))
+            << " - (" << base_to_k_plus_1 << " - 1)*" << n << " - " << base_to_k_plus_1
+            << ")/(" << base_to_k_plus_1 << " - 1)^2";
+        return out;
     }
 
     template struct smarandache<2>;

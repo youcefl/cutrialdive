@@ -8,7 +8,6 @@
 
 #include "common_defines.h"
 #include "hgint.hpp"
-#include "number_sequence.hpp"
 #include "barrett_mu_types.hpp"
 #include "modular_arithmetic_detail.hpp"
 
@@ -21,15 +20,15 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
-        using barrett_mu_type = no_barrett_t;
+        static constexpr bool initialize_from_value = false;
 
         static char const* short_name();
         static value_type value(index_type n);
-        static void print_value(index_type n, std::ostream & out);
-        static void print_expression(index_type n, std::ostream & out);
+        static std::ostream & print_value(index_type n, std::ostream & out);
+        static std::ostream & print_expression(index_type n, std::ostream & out);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_2(index_type n);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_mu(index_type n, residue_type d, barrett_mu_both_t mu);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod(residue_type v_n_mod_p, index_type n, residue_type p);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_mu(residue_type v_n_mod_p, index_type n, residue_type p, barrett_mu_type mu_p);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
     };
 }
@@ -51,17 +50,17 @@ namespace cutrialdive {
     }
 
     inline
-    void
+    std::ostream &
     mersenne::print_value(index_type n, std::ostream & out)
     {
-        out << value(n);
+        return out << value(n);
     }
 
     inline
-    void
+    std::ostream &
     mersenne::print_expression(index_type n, std::ostream & out)
     {
-        out << "2^" << n << "-1";
+        return out << "2^" << n << "-1";
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
@@ -70,6 +69,27 @@ namespace cutrialdive {
     )
     {
         return n > 0;
+    }
+
+    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
+    uint64_t mersenne::value_mod_mu(
+        uint64_t n,
+        uint64_t d,
+        barrett_mu_both_t mu
+    )
+    {
+        if(n <= 1) {
+            return ((n == 0) || (d == 1)) ? 0 : 1;
+        }
+        residue_type r = 1;
+        residue_type m = 2;
+        for(; n; n >>= 1) {
+            if(n & 1) {
+                r = mulmod(r, m, d, mu.mu64, mu.mu128);
+            }
+            m = mulmod(m, m, d, mu.mu64, mu.mu128);
+        }
+        return r ? r - 1 : d - 1;
     }
 
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST

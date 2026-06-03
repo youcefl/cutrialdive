@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <iostream>
 #include <cstddef>
 #include <bit>
 
@@ -35,10 +36,10 @@ namespace cutrialdive {
 
     // Computes N % d where N = <n[nlen-1], ..., n[1], n[0]>
     //  = n[0] + 2^64*n[1] + ... + 2^(64*(nlen-1))*n[nlen-1]
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d, uint64_t rnd, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const * n, uint64_t nlen, uint64_t d, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const * n, uint64_t nlen, uint64_t d, uint64_t rnd, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
     template <std::size_t N>
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t (&n) [N], uint64_t d, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const (&n) [N], uint64_t d, initial_residue<uint64_t> r = initial_residue<uint64_t>{0});
 
     // Returns (u1 * 2^64 + u0) mod d
     // Assumes u1 < d, 2^63 <= d < 2^64 and rnd is the reciprocal of d
@@ -65,6 +66,13 @@ namespace cutrialdive {
     constexpr
 #endif
     CUTRIALDIVE_DEVICE_AND_HOST size_t bit_length(ValueT n);
+
+    /// Returns a * b mod d
+    /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t mulmod(uint64_t a, uint64_t b, uint64_t d, uint64_t mu64, __uint128_t mu128);
 }
 
 
@@ -183,7 +191,7 @@ namespace cutrialdive {
     }
 
     inline
-    CUTRIALDIVE_DEVICE uint64_t modnby1_internal(uint64_t * n, uint64_t nlen, uint64_t d, uint64_t nd, uint64_t rnd, uint64_t r)
+    CUTRIALDIVE_DEVICE uint64_t modnby1_internal(uint64_t const * n, uint64_t nlen, uint64_t d, uint64_t nd, uint64_t rnd, uint64_t r)
     {
         for(auto j = nlen - 1; ; --j) {
             r = mod2by1(r, n[j], nd, rnd);
@@ -197,21 +205,21 @@ namespace cutrialdive {
     // Computes N % d where N = <n[nlen-1], ..., n[1], n[0]>
     //  = n[0] + 2^64*n[1] + ... + 2^(64*(nlen-1))*n[nlen-1]
     inline
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d, initial_residue<uint64_t> ir)
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const * n, uint64_t nlen, uint64_t d, initial_residue<uint64_t> ir)
     {
         auto nd = normalize(d);
         return modnby1_internal(n, nlen, d, nd, reciprocal(nd), ir.value);
     }
 
     inline
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t * n, uint64_t nlen, uint64_t d, uint64_t rnd, initial_residue<uint64_t> ir)
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const * n, uint64_t nlen, uint64_t d, uint64_t rnd, initial_residue<uint64_t> ir)
     {
         return modnby1_internal(n, nlen, d, normalize(d), rnd, ir.value);
     }
 
     template <size_t N>
     inline
-    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t (&n) [N], uint64_t d, initial_residue<uint64_t> ir)
+    CUTRIALDIVE_DEVICE uint64_t modnby1(uint64_t const (&n) [N], uint64_t d, initial_residue<uint64_t> ir)
     {
         return modnby1(&n[0], N, d, ir);
     }
@@ -234,20 +242,26 @@ namespace cutrialdive {
     inline __uint128_t mul128hi(__uint128_t a, __uint128_t b)
     {
         // Let a and b's base 2^64 representation be
-        // a = a0 + 2^64*a1
-        // b = b0 + 2^64*b1
+        //   a = a0 + 2^64*a1
+        //   b = b0 + 2^64*b1
         // then
-        // ab = a0b0 + (a0b1+a1b0)*2^64 + a1b1*2^128
-        // . a0b0 contributes nothing to the result
-        // . propagate carry from middle term if needed
+        //   ab = a0b0 + (a0b1 + a1b0)*2^64 + a1b1*2^128
+        //      = (a0b0 mod 2^64) + (floor(a0b0 / 2^64) + a0b1 + a1b0)*2^64 + a1b1*2^128
+        //  -> first term contributes nothing to the result
+        // Let
+        //   m = floor(a0b0 / 2^64) + a0b1 + a1b0
+        //  -> carry propagation for m yields a carry c in {0, 1}
+        //  -> return a1b1 + high_64_bits(middle) + c
         uint64_t a0 = a & ~uint64_t{0};
         uint64_t a1 = a >> 64;
         uint64_t b0 = b & ~uint64_t{0};
         uint64_t b1 = b >> 64;
-        __uint128_t lmid = __uint128_t{a0} * b1;
-        __uint128_t mid = lmid + __uint128_t{a1} * b0;
-        uint32_t carry = (mid < lmid) ? 1 : 0;
-        return __uint128_t{a1} * b1 + carry + (mid >> 64);
+        __uint128_t mid = (__uint128_t{a0} * b0) >> 64;
+        __uint128_t lmid = mid + __uint128_t{a0} * b1;
+        uint32_t carry = (lmid < mid) ? 1 : 0;
+        mid = lmid + __uint128_t{a1} * b0;
+        carry = carry || (mid < lmid);
+        return __uint128_t{a1} * b1 + (mid >> 64) + (__uint128_t(carry) << 64);
     }
 
     template <typename ValueT>
@@ -286,4 +300,21 @@ namespace cutrialdive {
             return res;
         }
     }
+
+
+    /// Returns a * b mod d
+    /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t mulmod(uint64_t a, uint64_t b, uint64_t d, uint64_t mu64, __uint128_t mu128)
+    {
+        auto ab = __uint128_t(a) * b;
+        auto q = (ab >> 64) ? mul128hi(ab, mu128) : ((ab * mu64) >> 64);
+        __uint128_t r = ab - q * d;
+        return r >= d ? r - d : r;
+    }
 }
+

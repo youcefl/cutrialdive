@@ -5,61 +5,49 @@
 #pragma once
 
 #include <ostream>
-#include "num_seq_id.hpp"
+#include <string_view>
+#include "number_sequence_detail.hpp"
 
 namespace cutrialdive {
 
     template <typename Seq>
-    concept NumberSequence = requires {
+    concept NumberSequence = requires(Seq seq)
+    {
         typename Seq::index_type;
-        typename Seq::value_type;
         typename Seq::residue_type;
-        typename Seq::barrett_mu_type;
-        
+
         // A short name for the sequence e.g. M for Mersenne, Sm for Smarandache.
-        { Seq::short_name() } 
-            -> std::same_as<char const*>;
+        { seq.short_name() }
+            -> std::convertible_to<std::string_view>;
+    }
+    &&
+    (
+        // Need one of these for initialization
+        (InitializeFromValue<Seq> && HasValue<Seq>)
+        || HasValueMod<Seq>
+        || HasValueModMu<Seq>
+    )
+    &&
+    (
+        // Need to be able to compute residue mod 2
+        (InitializeFromValue<Seq> && HasValue<Seq>)
+        || HasValueMod<Seq>
+        || HasValueModTwo<Seq>
+    )
+    &&
+    (
+        // Needed for propagation of residues
+        HasNextValueMod<Seq> || HasNextValueModMu<Seq>
+    )
+    &&
+    (
+        // Need to be able to propagate residue mod 2
+        HasNextValueMod<Seq> || HasNextValueModTwo<Seq>
+    )
+        // If both value_mod_mu and next_value_mod_mu are provided they have to have the same mu type
+    &&  HaveConsistentMuType<Seq>
+    ;
 
-        // Prints the value of S(n) in base 10
-        { Seq::print_value(std::declval<typename Seq::index_type>(), std::declval<std::ostream&>()) } 
-            -> std::same_as<void>;
-
-        // Prints an expression that evaluates to S(n)
-        { Seq::print_expression(std::declval<typename Seq::index_type>(), std::declval<std::ostream&>()) } 
-            -> std::same_as<void>;
-        
-        // Returns S(n)
-        { Seq::value(std::declval<typename Seq::index_type>()) }
-            -> std::same_as<typename Seq::value_type>;
-
-        // Returns S(n) mod 2
-        { Seq::value_mod_2(std::declval<typename Seq::index_type>()) }
-            -> std::same_as<typename Seq::residue_type>;
-
-        // Given S(n) mod 2 return S(n+1) mod 2
-        { Seq::next_value_mod_2(
-            std::declval<typename Seq::residue_type>(),
-            std::declval<typename Seq::index_type>()
-        ) } -> std::same_as<typename Seq::residue_type>;
-        
-        // Returns S(n+1) mod d given S(n) mod d, n and d
-        // d is guaranteed to be odd
-        { Seq::next_value_mod(
-            std::declval<typename Seq::residue_type>(), // S(n) mod d
-            std::declval<typename Seq::index_type>(),   // n
-            std::declval<typename Seq::residue_type>()  // d
-        ) } -> std::same_as<typename Seq::residue_type>;
-        
-        // Modular recurrence with Barrett multiplier
-        // Given S(n) mod d, n, d and mu(d) return S(n+1) mod d
-        // d is guaranteed to be odd
-        // mu(d) is the Barrett reciprocal of d
-        { Seq::next_value_mod_mu(
-            std::declval<typename Seq::residue_type>(), // S(n) mod d
-            std::declval<typename Seq::index_type>(),   // n
-            std::declval<typename Seq::residue_type>(), // d
-            std::declval<typename Seq::barrett_mu_type>()  // mu(d)
-        ) } -> std::same_as<typename Seq::residue_type>;
-    };
 }
+
 

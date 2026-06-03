@@ -17,6 +17,7 @@
 #include "timer.hpp"
 #include "modular_arithmetic_detail.hpp"
 #include "number_sequence.hpp"
+#include "number_sequence_helpers.hpp"
 #include "num_seq_dispatch.hpp"
 #include "barrett_reciprocals.hpp"
 #include "builtin_number_sequences.hpp"
@@ -60,15 +61,17 @@ namespace cutrialdive {
 
         factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, opts.max_factors_per_number};
 
+        NumberSequenceT numSeq;
+
         // 2 is a special case, deal with it now so that only odd primes remain
         if(f0 <= 2 && f1 > 2) {
             f0 = 3;
-            auto residue = NumberSequenceT::value_mod_2(n0);
+            auto residue = value_mod_2(numSeq, n0);
             if(!residue) {
                 factors_buf.push_factor(0, 2);
             }
             for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
-                residue = NumberSequenceT::next_value_mod_2(residue, n);
+                residue = next_value_mod_2(numSeq, residue, n);
                 if(!residue) {
                     factors_buf.push_factor(n + 1 - n0, 2);
                 }
@@ -78,10 +81,15 @@ namespace cutrialdive {
         constexpr auto max_num_of_primes = size_t{1} << 22;
         constexpr auto segmentLen = uint64_t{1} << 26;
 
-        auto const firstNumber = NumberSequenceT::value(n0);
+        auto const firstNumber = [&](){
+            if constexpr(InitializeFromValue<NumberSequenceT>) {
+                return numSeq.value(n0);
+            } else {
+                return 0;
+            }
+        }();
         std::vector<uint64_t> primes;
         primes.reserve(max_num_of_primes);
-
 
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
             fx < f1;
@@ -94,17 +102,25 @@ namespace cutrialdive {
             #pragma omp parallel for
             for(auto i = 0; i < iEnd; ++i) {
                 auto p = primes[i];
-                auto residue = firstNumber.mod(p);
+                auto barrettMu = compute_barrett_mu_numseq<NumberSequenceT>(p);
+                auto residue = [&](){
+                    if constexpr(InitializeFromValue<NumberSequenceT>) {
+                        return firstNumber.mod(p);
+                    } else if constexpr(HasValueModMu<NumberSequenceT>) {
+                        return numSeq.value_mod_mu(n0, p, barrettMu);
+                    } else {
+                        return numSeq.value_mod(n0, p);
+                    }
+                }();
                 if(!residue) {
                     factors_buf.push_factor(0, p);
                 }
                 /// Propagate residues to next numbers in sequence
-                auto barrettMu = compute_barrett_mu<NumberSequenceT>(p);
                 for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
-                    if constexpr(std::is_same_v<decltype(barrettMu), no_barrett_t>) {
-                        residue = NumberSequenceT::next_value_mod(residue, n, p);
+                    if constexpr(HasNextValueModMu<NumberSequenceT>) {
+                        residue = numSeq.next_value_mod_mu(residue, n, p, barrettMu);
                     } else {
-                        residue = NumberSequenceT::next_value_mod_mu(residue, n, p, barrettMu);
+                        residue = numSeq.next_value_mod(residue, n, p);
                     }
                     if(!residue) {
                         factors_buf.push_factor(n + 1 - n0, p);

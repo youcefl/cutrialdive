@@ -77,21 +77,6 @@ endif()
 
 add_executable(cutrialdive ${SOURCES})
 
-# Host C++ files get C++23
-#target_compile_options(cutrialdive PRIVATE 
-#    $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>
-#)
-#if(CUTRIALDIVE_ENABLE_GPU)
-    # Don't use CUDA_STANDARD property — it's broken in CMake 3.25 for CUDA 13
-    # Instead, pass the flag directly to nvcc
-#    target_compile_options(cutrialdive PRIVATE 
-#        $<$<COMPILE_LANGUAGE:CUDA>:-std=c++20>
-#    )
-#endif()
-#if(CUTRIALDIVE_ENABLE_GPU)
-#    set_property(TARGET cutrialdive PROPERTY CUDA_STANDARD 20)
-#endif()
-
 target_include_directories(cutrialdive PRIVATE ${GMP_INCLUDE_DIR})
 target_link_libraries(cutrialdive PRIVATE ${GMP_LIBRARY})
 target_link_libraries(cutrialdive PRIVATE OpenMP::OpenMP_CXX)
@@ -106,3 +91,8 @@ if(CUTRIALDIVE_ENABLE_GPU)
 endif()
 
 install(TARGETS cutrialdive RUNTIME DESTINATION bin)
+
+
+enable_testing()
+
+add_subdirectory(tests)

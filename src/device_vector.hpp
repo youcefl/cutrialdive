@@ -24,6 +24,7 @@ namespace cutrialdive {
         /// Returns a device compatible view of the data
         device_span<ValueT> span() const;
         /// Returns pointer to data
+        ValueT const * data() const;
         ValueT * data();
         /// Returns allocated size
         std::size_t size() const;
@@ -54,6 +55,12 @@ namespace cutrialdive {
         size_ = 0;
     }
 
+    template <typename ValueT>
+    inline
+    ValueT const * device_vector<ValueT>::data() const
+    {
+        return values_;
+    }
     template <typename ValueT>
     inline
     ValueT * device_vector<ValueT>::data()

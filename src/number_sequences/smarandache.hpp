@@ -4,6 +4,8 @@
 */
 #pragma once
 
+#include <string>
+#include <sstream>
 #include <cstdint>
 #include <bit>
 
@@ -25,6 +27,7 @@ namespace cutrialdive {
         using value_type = HgInt;
         using residue_type = uint64_t;
         using barrett_mu_type = barrett_mu_both_t;
+        static constexpr bool initialize_from_value = true;
 
         static constexpr auto base  = Base;
 
@@ -33,9 +36,9 @@ namespace cutrialdive {
         /// Returns Sm_b(n)
         static value_type value(index_type n);
         /// Prints Sm_b(n) to the given stream
-        static void print_value(index_type n, std::ostream & out);
+        static std::ostream & print_value(index_type n, std::ostream & out);
         /// Prints to the given stream an expression that evaluates to Sm_b(n)
-        static void print_expression(index_type n, std::ostream & out);
+        static std::ostream & print_expression(index_type n, std::ostream & out);
         /// Returns Sm_b(n) mod 2
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_2(index_type n);
         /// Returns Sm_b(n + 1) mod p given Sm_b(n) mod p, n and p
@@ -64,6 +67,11 @@ namespace cutrialdive {
         static constexpr int floor_log2_base = std::bit_width(base) - 1;
     };
 
+    /// @brief Returns an expression which evaluates to smarandache<base>::value( @param n )
+    /// @tparam base
+    /// @param n index 
+    template <uint64_t base>
+    std::string smarandache_expr(uint64_t n);
 }
 
 
@@ -185,5 +193,13 @@ namespace cutrialdive {
             result *= base;
         }
         return result;
+    }
+
+    template <uint64_t base>
+    std::string smarandache_expr(uint64_t n)
+    {
+        std::ostringstream ostr;
+        smarandache<base>::print_expression(n, ostr);
+        return ostr.str();
     }
 }

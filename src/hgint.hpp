@@ -26,6 +26,7 @@ private:
 class HgInt
 {
 public:
+    using limbs_type = mp_limb_t;
     ~HgInt();
     HgInt();
     HgInt(HgInt const &);
@@ -300,3 +301,9 @@ to_string(HgInt const& hg) {
     return v;
 }
 
+
+HGINT_INLINE
+bool operator==(HgInt const& x, HgInt const& y)
+{
+    return mpz_cmp(x.get(), y.get()) == 0;
+}

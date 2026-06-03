@@ -18,7 +18,10 @@ namespace cutrialdive {
     void device_memset(ValueT * dst, ValueT value, std::size_t size);
 
     template <typename ValueT>
-    void copy_from_device(ValueT * dst, ValueT * src, std::size_t size);
+    void copy_from_device(ValueT * dst, ValueT const * src, std::size_t size);
+
+    template <typename ValueT>
+    void copy_to_device(ValueT * dst, ValueT const * src, std::size_t size);
 }
 
 namespace cutrialdive {
@@ -52,9 +55,16 @@ namespace cutrialdive {
 
     template <typename ValueT>
     inline
-    void copy_from_device(ValueT * dst, ValueT * src, std::size_t size)
+    void copy_from_device(ValueT * dst, ValueT const * src, std::size_t size)
     {
         cudaMemcpy(dst, src, sizeof(ValueT) * size, cudaMemcpyDeviceToHost);
+    }
+
+    template <typename ValueT>
+    inline
+    void copy_to_device(ValueT * dst, ValueT const* src, std::size_t size)
+    {
+        cudaMemcpy(dst, src, sizeof(ValueT) * size, cudaMemcpyHostToDevice);
     }
 
 }

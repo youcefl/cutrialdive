@@ -9,6 +9,7 @@
 #ifdef CUTRIALDIVE_ENABLE_PRP
 #include "prp.hpp"
 #endif
+#include "number_sequence.hpp"
 #include "builtin_number_sequences.hpp"
 #include "num_seq_spec.hpp"
 #include "num_seq_dispatch.hpp"
@@ -21,8 +22,11 @@ namespace {
     template <typename IndexT>
     int print_value(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
         return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
-            Seq::print_value(n, out);
-            out << std::endl;
+            if constexpr(HasValuePrinter<Seq>) {
+                Seq{}.print_value(n, out) << std::endl;
+            } else {
+                out << "Value not available" << std::endl;
+            }
             return 0;
         });
     }
@@ -30,8 +34,11 @@ namespace {
     template <typename IndexT>
     int print_expression(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
         return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
-            Seq::print_expression(n, out);
-            out << std::endl;
+            if constexpr(HasExpressionPrinter<Seq>) {
+                Seq{}.print_expression(n, out) << std::endl;
+            } else {
+                out << "Expression not available" << std::endl;
+            }
             return 0;
         });
     }
