@@ -242,7 +242,7 @@ R"-(                        )
 
     --print-expression n
             prints an expression whose evaluation yields S(n). For example
-            "--mode mersenne --print-expression 7" will output 2^7-1.
+            "--num-seq mersenne --print-expression 7" will output 2^7-1.
 
     Trial factoring
     ---------------

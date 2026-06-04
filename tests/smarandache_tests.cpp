@@ -36,7 +36,7 @@ namespace {
     // d must be odd
     auto mu(uint64_t d)
     {
-        return ctd::compute_barrett_mu<ctd::barrett_mu_both_t>(d);
+        return ctd::compute_barrett_mu<ctd::mu_both_t>(d);
     }
 }
 

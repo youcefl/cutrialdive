@@ -84,7 +84,7 @@ int main(int argc, char** argv)
             return 0;
         }
 #endif
-        ctd::trial_factor(numSeqSpec, *options.tf_options);
+        ctd::trial_factor(numSeqSpec, *options.tf_options, std::cout);
     } catch(std::exception const & e) {
         std::cerr << e.what() << std::endl;
         return 1;

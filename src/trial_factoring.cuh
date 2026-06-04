@@ -196,28 +196,26 @@ namespace cutrialdive {
     }
 
     inline
-    auto device_synchronize()
+    auto device_synchronize(std::ostream & out)
     {
         auto cuStatus = cudaDeviceSynchronize();
         if(cuStatus != cudaSuccess) {
-            std::cerr << "Error returned by cudaDeviceSynchronize(): " <<
+            out << "Error returned by cudaDeviceSynchronize(): " <<
                 cudaGetErrorString(cuStatus) << std::endl;
         }
         return cuStatus;
     }
 
     inline
-    void print_gpu_device_info(int device_id = 0)
+    void print_gpu_device_info(int device_id, std::ostream & out)
     {
         cudaDeviceProp props;
         auto cuStatus = cudaGetDeviceProperties(&props, device_id);
         if (cuStatus == cudaSuccess) {
-            printf("GPU device %d: %s (%.1f GiB)\n", 
-                device_id, 
-                props.name, 
-                double(props.totalGlobalMem) / (1024.0 * 1024 * 1024));
+            out << "GPU device " << device_id << ": " << props.name
+                << "(" << double(props.totalGlobalMem) / (1024.0 * 1024 * 1024) << " GiB)\n";
         } else {
-            std::cerr << "Error while getting device info: " << cudaGetErrorString(cuStatus) << std::endl;
+            out << "Error while getting device info: " << cudaGetErrorString(cuStatus) << std::endl;
         }
     }
 
@@ -225,10 +223,11 @@ namespace cutrialdive {
     inline
     void device_trial_factor(
         trial_factoring_options const & opts,
-        factoring_results<uint64_t, uint32_t> & results
+        factoring_results<uint64_t, uint32_t> & results,
+        std::ostream & out
         )
     {
-        print_gpu_device_info();
+        print_gpu_device_info(0, out);
 
 
         int numSMs;
@@ -275,7 +274,7 @@ namespace cutrialdive {
                 computeDataTime += std::chrono::high_resolution_clock::now() - computeDataStart;
             }
 
-            device_synchronize();
+            device_synchronize(out);
 
             auto copyPrimeDataToHostStart = std::chrono::high_resolution_clock::now();
             devicePrimeData.copy_from_host(primes, primeData);
@@ -291,23 +290,23 @@ namespace cutrialdive {
             }
             auto err = cudaGetLastError();
             if(err != cudaSuccess) {
-                std::cout << "Error executing kernel" << std::endl;
-                printf("Launch error: %s\n", cudaGetErrorString(err));
+                out << "Error executing kernel" << std::endl;
+                out << "Launch error: " << cudaGetErrorString(err) << std::endl;
             }
         }
-        device_synchronize();
+        device_synchronize(out);
 
         auto tfEnd = std::chrono::high_resolution_clock::now();
         
 
         if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
-            std::cout << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
+            out << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
         }
-        std::cout << "Copying prime data to device took " << copyPrimeDataToHostTime.count() << "s (cumulated time)" << std::endl;
+        out << "Copying prime data to device took " << copyPrimeDataToHostTime.count() << "s (cumulated time)" << std::endl;
 
         results = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
 
-        std::cout << "[Factoring took "
+        out << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 
                         tfStart).count() / 1000 << "s ("
                    << "sieve: " << sieve_time.count() << "s)]" << std::endl;

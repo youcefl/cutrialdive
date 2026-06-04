@@ -26,7 +26,7 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
-        using barrett_mu_type = barrett_mu_both_t;
+        using barrett_mu_type = mu_both_t;
         static constexpr bool initialize_from_value = true;
 
         static constexpr auto base  = Base;

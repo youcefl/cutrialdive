@@ -113,9 +113,9 @@ namespace cutrialdive {
     /// If true the engine will use this function to evaluate S(n0) mod d
     template <typename Seq>
     concept HasValueModMu =
-           HasValueModMuImpl<Seq, barrett_mu64_t>
-        || HasValueModMuImpl<Seq, barrett_mu128_t>
-        || HasValueModMuImpl<Seq, barrett_mu_both_t>
+           HasValueModMuImpl<Seq, mu64_t>
+        || HasValueModMuImpl<Seq, mu128_t>
+        || HasValueModMuImpl<Seq, mu_both_t>
     ;
 
     template <typename Seq, typename BarrettMuT>
@@ -138,18 +138,18 @@ namespace cutrialdive {
     /// If true the engine will use this function to evaluate S(n + 1) mod d given S(n) mod d
     template <typename Seq>
     concept HasNextValueModMu =
-           HasNextValueModMuImpl<Seq, barrett_mu64_t>
-        || HasNextValueModMuImpl<Seq, barrett_mu128_t>
-        || HasNextValueModMuImpl<Seq, barrett_mu_both_t>
+           HasNextValueModMuImpl<Seq, mu64_t>
+        || HasNextValueModMuImpl<Seq, mu128_t>
+        || HasNextValueModMuImpl<Seq, mu_both_t>
     ;
 
 
     template <typename Seq>
     concept HaveConsistentMuType =
         !HasValueModMu<Seq> || !HasNextValueModMu<Seq>
-        || ((HasValueModMuImpl<Seq, barrett_mu64_t> == HasNextValueModMuImpl<Seq, barrett_mu64_t>)
-            && (HasValueModMuImpl<Seq, barrett_mu128_t> == HasNextValueModMuImpl<Seq, barrett_mu128_t>)
-            && (HasValueModMuImpl<Seq, barrett_mu_both_t> == HasNextValueModMuImpl<Seq, barrett_mu_both_t>)
+        || ((HasValueModMuImpl<Seq, mu64_t> == HasNextValueModMuImpl<Seq, mu64_t>)
+            && (HasValueModMuImpl<Seq, mu128_t> == HasNextValueModMuImpl<Seq, mu128_t>)
+            && (HasValueModMuImpl<Seq, mu_both_t> == HasNextValueModMuImpl<Seq, mu_both_t>)
         )
     ;
 

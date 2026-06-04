@@ -74,16 +74,20 @@ if(CUTRIALDIVE_ENABLE_GPU)
     list(FILTER SOURCES EXCLUDE REGEX "autotests\\.cpp$")
     list(FILTER SOURCES EXCLUDE REGEX "trial_factoring\\.cpp$")
 endif()
+list(FILTER SOURCES EXCLUDE REGEX "main\\.cpp$")
 
-add_executable(cutrialdive ${SOURCES})
+add_library(cutrialdive_core STATIC ${SOURCES})
 
-target_include_directories(cutrialdive PRIVATE ${GMP_INCLUDE_DIR})
+add_executable(cutrialdive src/main.cpp)
+
+target_include_directories(cutrialdive_core PUBLIC ${GMP_INCLUDE_DIR})
+target_include_directories(cutrialdive_core PUBLIC src)
+target_link_libraries(cutrialdive_core PUBLIC primesieve::primesieve)
+target_link_libraries(cutrialdive_core PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(cutrialdive PRIVATE cutrialdive_core)
 target_link_libraries(cutrialdive PRIVATE ${GMP_LIBRARY})
-target_link_libraries(cutrialdive PRIVATE OpenMP::OpenMP_CXX)
-target_include_directories(cutrialdive PRIVATE src)
-target_link_libraries(cutrialdive PRIVATE primesieve::primesieve)
 if(CUTRIALDIVE_ENABLE_PRP)
-    target_include_directories(cutrialdive PRIVATE ${GWNUM_INCLUDE})
+    target_include_directories(cutrialdive_core PUBLIC ${GWNUM_INCLUDE})
     target_link_libraries(cutrialdive PRIVATE ${GWNUM_LIB})
 endif()
 if(CUTRIALDIVE_ENABLE_GPU)
@@ -91,7 +95,6 @@ if(CUTRIALDIVE_ENABLE_GPU)
 endif()
 
 install(TARGETS cutrialdive RUNTIME DESTINATION bin)
-
 
 enable_testing()
 

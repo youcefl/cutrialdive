@@ -27,7 +27,7 @@ namespace cutrialdive {
         static std::ostream & print_value(index_type n, std::ostream & out);
         static std::ostream & print_expression(index_type n, std::ostream & out);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_2(index_type n);
-        CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_mu(index_type n, residue_type d, barrett_mu_both_t mu);
+        CUTRIALDIVE_DEVICE_AND_HOST static residue_type value_mod_mu(index_type n, residue_type d, mu_both_t mu);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod(residue_type v_n_mod_p, index_type n, residue_type p);
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(residue_type v_n_mod_p, index_type n);
     };
@@ -75,7 +75,7 @@ namespace cutrialdive {
     uint64_t mersenne::value_mod_mu(
         uint64_t n,
         uint64_t d,
-        barrett_mu_both_t mu
+        mu_both_t mu
     )
     {
         if(n <= 1) {

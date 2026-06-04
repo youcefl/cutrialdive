@@ -25,17 +25,23 @@ if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
     message(FATAL_ERROR "GMP not found. Install libgmp-dev or set GMP_ROOT to the install prefix.")
 endif()
 
-add_executable(cutrialdive_tests
+set(SOURCES
     test_modular.cpp
     mersenne_tests.cpp
     smarandache_tests.cpp
     smarandache_gp_tests.cpp
-    ../src/number_sequences/smarandache.cpp
+    tf_tests.cpp
 )
+if(CUTRIALDIVE_ENABLE_GPU)
+    list(APPEND SOURCES ./tf.cu)
+else()
+    list(APPEND SOURCES ./tf.cpp)
+endif()
 
-target_include_directories(cutrialdive_tests PRIVATE ${GMP_INCLUDE_DIR})
-target_include_directories(cutrialdive_tests PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
+add_executable(cutrialdive_tests ${SOURCES})
+
+target_link_libraries(cutrialdive_tests PRIVATE cutrialdive_core)
 target_link_libraries(cutrialdive_tests PRIVATE ${GMP_LIBRARY})
 target_link_libraries(cutrialdive_tests PRIVATE
     Catch2::Catch2WithMain

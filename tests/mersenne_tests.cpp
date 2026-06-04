@@ -9,7 +9,7 @@
 
 using cutrialdive::mersenne;
 using cutrialdive::compute_barrett_mu;
-using cutrialdive::barrett_mu_both_t;
+using cutrialdive::mu_both_t;
 
 
 TEST_CASE("Basic Mersenne number tests 1", "[mersenne]")
@@ -48,7 +48,7 @@ TEST_CASE("Basic Mersenne number modular tests 2", "[mersenne][modular]")
 
 TEST_CASE("Mersenne number modular tests", "[mersenne][modular]")
 {
-    auto mu = compute_barrett_mu<barrett_mu_both_t>;
+    auto mu = compute_barrett_mu<mu_both_t>;
     
     REQUIRE(mersenne::value_mod_mu(21, 7, mu(7)) == 0);
     REQUIRE(mersenne::value_mod_mu(21, 127, mu(127)) == 0);

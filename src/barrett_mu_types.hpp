@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include "common_defines.h"
 
 namespace cutrialdive {
 
@@ -12,15 +13,23 @@ namespace cutrialdive {
     struct no_barrett_t {};
 
     /// The Barrett 64-bit reciprocal
-    using barrett_mu64_t = uint64_t;
+    struct mu64_t {
+        uint64_t v;
+        CUTRIALDIVE_DEVICE_AND_HOST
+        explicit mu64_t(uint64_t x) : v(x) {}
+    };
 
     /// The Barrett 128-bit reciprocal
-    using barrett_mu128_t = __uint128_t;
+    struct mu128_t {
+        __uint128_t v;
+        CUTRIALDIVE_DEVICE_AND_HOST
+        explicit mu128_t(__uint128_t x) : v(x) {}
+    };
 
     /// Both the 64-bit and 128-bit reciprocals
-    struct barrett_mu_both_t
+    struct mu_both_t
     {
-        barrett_mu128_t mu128;
+        __uint128_t mu128;
         uint64_t mu64;
     };
 
