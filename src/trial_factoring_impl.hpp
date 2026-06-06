@@ -26,7 +26,7 @@
 #include "num_seq_dispatch.hpp"
 #include "barrett_reciprocals.hpp"
 #include "builtin_number_sequences.hpp"
-
+#include "progress.hpp"
 
 
 namespace cutrialdive {
@@ -58,7 +58,7 @@ namespace detail {
     void host_trial_factor(
         trial_factoring_options const & opts,
         factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & //out
+        std::ostream & out
         )
     {
         uint64_t n0 = opts.n0, n1 = opts.n1, f0 = opts.f0, f1 = opts.f1;
@@ -66,6 +66,8 @@ namespace detail {
         factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, opts.max_factors_per_number};
 
         NumberSequenceT numSeq;
+
+        progress progressHandler{f1, out};
 
         // 2 is a special case, deal with it now so that only odd primes remain
         if(f0 <= 2 && f1 > 2) {
@@ -131,7 +133,9 @@ namespace detail {
                     }
                 }
             }
+            progressHandler.update(fy, !primes.empty() ? primes.back() : 0);
         }
+        progressHandler.end();
         results = factors_buf.to_factoring_results();
     }
 

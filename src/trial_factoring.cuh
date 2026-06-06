@@ -3,8 +3,11 @@
 * Copyright (c) Youcef Lemsafer
 */
 #pragma once
+
 #include <cinttypes>
+#include <chrono>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 
 #include "device_vector.hpp"
@@ -17,6 +20,7 @@
 #include "barrett_reciprocals.hpp"
 #include "number_sequence.hpp"
 #include "number_sequence_helpers.hpp"
+#include "progress.hpp"
 
 
 namespace cutrialdive {
@@ -213,10 +217,20 @@ namespace cutrialdive {
         auto cuStatus = cudaGetDeviceProperties(&props, device_id);
         if (cuStatus == cudaSuccess) {
             out << "GPU device " << device_id << ": " << props.name
-                << "(" << double(props.totalGlobalMem) / (1024.0 * 1024 * 1024) << " GiB)\n";
+                << " (" << std::setprecision(3) << double(props.totalGlobalMem) / (1024.0 * 1024 * 1024) << " GiB)\n";
         } else {
             out << "Error while getting device info: " << cudaGetErrorString(cuStatus) << std::endl;
         }
+    }
+
+    inline
+    double delta_now(decltype(std::chrono::high_resolution_clock::now()) start)
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        if(now <= start) {
+            return 0.0;
+        }
+        return std::chrono::duration<double>(now - start).count();
     }
 
     template <typename NumberSequenceT>
@@ -233,7 +247,7 @@ namespace cutrialdive {
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
         auto tfStart = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> sieve_time, computeDataTime, copyPrimeDataToHostTime;
+        double sieveTime{}, computeDataTime{}, copyPrimeDataToHostTime{};
     
         constexpr auto precomputeReciprocals = PrecomputeReciprocals::no;
         std::vector<uint64_t> primes;
@@ -248,6 +262,7 @@ namespace cutrialdive {
 
         device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
+        progress progressHandler{opts.f1, out};
         // Special treatment for 2 if needed
         auto f0 = opts.f0;
         if(f0 <= 2 && opts.f1 > 2) {
@@ -266,19 +281,19 @@ namespace cutrialdive {
             auto sieveStart = std::chrono::high_resolution_clock::now();
             primes.clear();
             sieve(fx, fy, primes);
-            sieve_time += std::chrono::high_resolution_clock::now() - sieveStart;
+            sieveTime += delta_now(sieveStart);
 
             if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
                 auto computeDataStart = std::chrono::high_resolution_clock::now();
                 compute_prime_data(primes, primeData);
-                computeDataTime += std::chrono::high_resolution_clock::now() - computeDataStart;
+                computeDataTime += delta_now(computeDataStart);
             }
 
             device_synchronize(out);
 
             auto copyPrimeDataToHostStart = std::chrono::high_resolution_clock::now();
             devicePrimeData.copy_from_host(primes, primeData);
-            copyPrimeDataToHostTime += std::chrono::high_resolution_clock::now() - copyPrimeDataToHostStart;
+            copyPrimeDataToHostTime += delta_now(copyPrimeDataToHostStart);
             tf_data.prime_data = devicePrimeData.get_data();
 
             if(fy <= 2642258) {
@@ -293,23 +308,25 @@ namespace cutrialdive {
                 out << "Error executing kernel" << std::endl;
                 out << "Launch error: " << cudaGetErrorString(err) << std::endl;
             }
+            progressHandler.update(fy, !primes.empty() ? primes.back() : 0);
         }
         device_synchronize(out);
+        progressHandler.end();
 
         auto tfEnd = std::chrono::high_resolution_clock::now();
         
 
         if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
-            out << "Computing prime data on host took " << computeDataTime.count() << "s (cumulated time)" << std::endl;
+            out << "Computing prime data on host took " << computeDataTime << "s (cumulated time)" << std::endl;
         }
-        out << "Copying prime data to device took " << copyPrimeDataToHostTime.count() << "s (cumulated time)" << std::endl;
+        out << "Copying prime data to device took " << copyPrimeDataToHostTime << "s (cumulated time)" << std::endl;
 
         results = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
 
         out << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 
                         tfStart).count() / 1000 << "s ("
-                   << "sieve: " << sieve_time.count() << "s)]" << std::endl;
+                   << "sieve: " << sieveTime << "s)]" << std::endl;
 
     }
 
