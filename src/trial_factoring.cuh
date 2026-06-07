@@ -260,9 +260,17 @@ namespace cutrialdive {
 
         NumberSequenceT numSeq;
 
-        device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
+        device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{
+            numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
-        progress progressHandler{opts.f1, out};
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, out) 
+                                                        : std::unique_ptr<progress>{};
+        auto updateProgress = progressHandler
+            ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
+                progressHandler->update(segUpperBound, lastPrimeInSeg); 
+              }}
+            : std::function<void(uint64_t, uint64_t)>{[](auto, auto) {}};
+
         // Special treatment for 2 if needed
         auto f0 = opts.f0;
         if(f0 <= 2 && opts.f1 > 2) {
@@ -308,10 +316,12 @@ namespace cutrialdive {
                 out << "Error executing kernel" << std::endl;
                 out << "Launch error: " << cudaGetErrorString(err) << std::endl;
             }
-            progressHandler.update(fy, !primes.empty() ? primes.back() : 0);
+            updateProgress(fy, !primes.empty() ? primes.back() : 0);
         }
         device_synchronize(out);
-        progressHandler.end();
+        if(progressHandler) {
+            progressHandler->end();
+        }
 
         auto tfEnd = std::chrono::high_resolution_clock::now();
         

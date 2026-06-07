@@ -67,7 +67,13 @@ namespace detail {
 
         NumberSequenceT numSeq;
 
-        progress progressHandler{f1, out};
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(f1, out)
+                                                        : std::unique_ptr<progress>{};
+        auto updateProgress = progressHandler
+            ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
+                progressHandler->update(segUpperBound, lastPrimeInSeg); 
+              }}
+            : std::function<void(uint64_t, uint64_t)>{[](auto, auto) {}};
 
         // 2 is a special case, deal with it now so that only odd primes remain
         if(f0 <= 2 && f1 > 2) {
@@ -133,9 +139,11 @@ namespace detail {
                     }
                 }
             }
-            progressHandler.update(fy, !primes.empty() ? primes.back() : 0);
+            updateProgress(fy, !primes.empty() ? primes.back() : 0);
         }
-        progressHandler.end();
+        if(progressHandler) {
+            progressHandler->end();
+        }
         results = factors_buf.to_factoring_results();
     }
 

@@ -16,9 +16,12 @@ namespace cutrialdive::tests {
     template <typename PeanoTFunc>
     void test_peano(PeanoTFunc tfPeano)
     {
-        uint64_t n0 = 2956708207;
-        uint64_t n1 = 2956708707;
-        trial_factoring_options tfOpts{n0, n1, 0, 1u << 24, {}, 1024};
+        constexpr uint64_t n0 = 2956708207;
+        constexpr uint64_t n1 = 2956708707;
+        constexpr auto maxFactorsPerNumber = 1024;
+        constexpr auto isProgressEnabled = false;
+        trial_factoring_options tfOpts{n0, n1, 0, 1u << 24, {},
+                maxFactorsPerNumber, isProgressEnabled};
         std::ostringstream ostr;
         auto results = tfPeano(tfOpts, ostr);
 
@@ -65,7 +68,10 @@ TEST_CASE("TF Peano with val, valmod_2, valmod_mu128, next_val_mod_mu128")
 
 TEST_CASE("TF Mersenne")
 {
-    trial_factoring_options tfOpts{1, 101, 0, 1u << 16, {}, 1024};
+    constexpr auto maxFactorsPerNumber = 1024;
+    constexpr auto isProgressEnabled = true;
+    trial_factoring_options tfOpts{1, 101, 0, 1u << 16, {},
+            maxFactorsPerNumber, isProgressEnabled};
     std::ostringstream ostr;
 
     auto results = trial_factor(num_seq_spec{num_seq_id::mersenne}, tfOpts, ostr);

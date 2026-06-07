@@ -164,6 +164,10 @@ namespace cutrialdive {
                 throw command_line_parse_exception{
                             "Mixing --tf-bits with --tf-start and --tf-end is not allowed"};
             }
+            if(!strcmp(*ppargv, "--no-progress")) {
+                tfOptions.is_progress_enabled = false;
+                continue;
+            }
             eat_valued_option<std::string>("--output", ppargv, buildException,
                         [&tfOptions](auto path){ tfOptions.output_path = path; });
         }
@@ -195,6 +199,7 @@ namespace cutrialdive {
                         | --print-expression n 
                         | -s n0 [-e n1] ( --tf-bits bits_count 
                                         | --tf-start f0 --tf-end f1 )
+                          [--no-progress]
                           [--output <output_path>]
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
@@ -266,6 +271,9 @@ R"-(                        )
 
     --tf-end f1
             Upper bound of the set of primes to consider (f1 is excluded)
+
+    --no-progress
+            Suppresses progress display
 
     --output <path>
             Causes the output to be written to the given path

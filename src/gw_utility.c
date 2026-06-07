@@ -15,7 +15,7 @@ g giants
 #include "gwcommon.h"
 #include "gw_utility.h"
 
-#define MAX_STRING_LENGTH 100000
+#define MAX_STRING_LENGTH 128*1024
 #define GW_THRESHOLD 4096
 #define SAFE 1024 // Many careful loops for large base loop.
 #define STEP 256 // Iterations before check.
@@ -24,16 +24,41 @@ g giants
 
 /*****************************************************************************/
 
+char * get_str(char * stk_allocated, size_t stk_allocated_size, mpz_srcptr mn)
+{
+    int needed = ( mpz_sizeinbase ( mn, 10 ) + 3 ) / 4 * 4 + 4;
+    if ( needed < stk_allocated_size )
+    {
+        mpz_get_str ( stk_allocated, 10, mn );
+        return stk_allocated;
+    }
+    return mpz_get_str ( (char*) NULL, 10, mn );
+}
+
+/*****************************************************************************/
+
+void free_str(char * stk_allocated, char * str)
+{
+    if ( str == stk_allocated ) {
+        return;
+    }
+    void (*freefunc) (void*, size_t );
+    mp_get_memory_functions ( NULL, NULL, &freefunc );
+    freefunc ( str, 0 );
+}
+
+/*****************************************************************************/
+
 void small_base_exp ( mpz_ptr mr, double db, mpz_ptr me, mpz_srcptr mn )
 {
     int fft_size = 1;
     int g_length;
     int j;
-    char string [MAX_STRING_LENGTH];
+    char stk_string [MAX_STRING_LENGTH];
     gwnum wr, wc;
     gwhandle *gwdata;
     giant gr, gn;
-    mpz_get_str ( string, 10, mn );
+    char * string = get_str ( stk_string, MAX_STRING_LENGTH, mn );
     g_length = ( strlen ( string ) >> 2 ) + 8;
     gr  = newgiant ( g_length );
     gn  = newgiant ( g_length );
@@ -82,6 +107,7 @@ void small_base_exp ( mpz_ptr mr, double db, mpz_ptr me, mpz_srcptr mn )
     }  
     w2m ( wr, gr, mr );
     gwdone ( gwdata );
+    free_str ( stk_string, string );
 }
 
 /*****************************************************************************/
@@ -91,11 +117,11 @@ void medium_base_exp ( mpz_ptr mr, double db, mpz_ptr me, mpz_srcptr mn )
     int fft_size = 1;
     int g_length;
     int j;
-    char string [MAX_STRING_LENGTH];
+    char stk_string [MAX_STRING_LENGTH];
     gwnum wr, wc;
     gwhandle *gwdata;
     giant gr, gn;
-    mpz_get_str ( string, 10, mn );
+    char * string = get_str ( stk_string, MAX_STRING_LENGTH, mn );
     g_length = ( strlen ( string ) >> 2 ) + 8;
     gr = newgiant ( g_length );
     gn = newgiant ( g_length );
@@ -137,6 +163,7 @@ void medium_base_exp ( mpz_ptr mr, double db, mpz_ptr me, mpz_srcptr mn )
     }
     w2m ( wr, gr, mr );
     gwdone ( gwdata );
+    free_str ( stk_string, string );
 }
 
 /*****************************************************************************/
@@ -147,9 +174,9 @@ void large_base_exp ( mpz_ptr mr, mpz_ptr mb, mpz_ptr me, mpz_srcptr mn )
     int g_length;
     int j = mpz_sizeinbase ( me, 2 ) - 2;
     int k = j - SAFE;
-    char string [MAX_STRING_LENGTH];
+    char stk_string [MAX_STRING_LENGTH];
     giant gr, gb, gn;
-    mpz_get_str ( string, 10, mn );
+    char * string = get_str ( stk_string, MAX_STRING_LENGTH, mn );
     g_length = ( strlen ( string ) >> 2 ) + 8;
     gr = newgiant ( g_length );
     gb = newgiant ( g_length );
@@ -213,6 +240,7 @@ void large_base_exp ( mpz_ptr mr, mpz_ptr mb, mpz_ptr me, mpz_srcptr mn )
     }
     w2m ( wr, gr, mr );
     gwdone ( gwdata );
+    free_str ( stk_string, string );
 }
 
 /*****************************************************************************/
