@@ -13,7 +13,7 @@ namespace cutrialdive {
     class progress
     {
     public:
-        progress(uint64_t target, std::ostream & out);
+        progress(uint64_t target, std::chrono::milliseconds period, std::ostream & out);
         ~progress();
         uint64_t target() const;
         /// @pre current <= target()
@@ -21,6 +21,7 @@ namespace cutrialdive {
         void end();
     private:
         uint64_t target_;
+        std::chrono::milliseconds period_;
         std::ostream & out_;
         bool ended_;
         size_t target_digits_;

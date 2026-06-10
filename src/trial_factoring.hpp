@@ -19,6 +19,7 @@ namespace cutrialdive {
     trial_factor(
         num_seq_spec numSeqSpec,
         trial_factoring_options const & opts,
+        tf_runtime_options const & runtimeOpts,
         std::ostream & out
     );
 
@@ -28,6 +29,7 @@ namespace cutrialdive {
     factoring_results<uint64_t, uint32_t>
     resume_trial_factoring(
         std::filesystem::path const & checkpointPath,
+        tf_runtime_options const & runtimeOpts,
         std::ostream & out
     );
 }

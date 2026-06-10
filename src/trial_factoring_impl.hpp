@@ -58,6 +58,7 @@ namespace detail {
         requires NumberSequence<NumberSequenceT>
     void host_trial_factor(
         trial_factoring_options const & opts,
+        tf_runtime_options const & runtimeOpts,
         factoring_results<uint64_t, uint32_t> & results,
         std::ostream & out,
         checkpoint_manager * checkpoint = nullptr,
@@ -69,7 +70,7 @@ namespace detail {
         uint64_t f1 = opts.f1;
 
         if(resumeState) {
-            out << "Resuming at next_prime(" << resumeState->last_processed_prime << ")" << std::endl;
+            out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
         }
 
         factors_buffer<uint64_t> factorsBuf = resumeState 
@@ -78,7 +79,7 @@ namespace detail {
 
         NumberSequenceT numSeq;
 
-        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(f1, out)
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(f1, runtimeOpts.progress_period, out)
                                                         : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
             ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
@@ -172,6 +173,7 @@ namespace detail {
         requires NumberSequence<NumberSequenceT>
     void trial_factor(
         trial_factoring_options const & opts,
+        tf_runtime_options const & runtimeOpts,
         factoring_results<uint64_t, uint32_t> & results,
         std::ostream & out,
         checkpoint_manager * checkpoint =  nullptr,
@@ -212,16 +214,17 @@ namespace detail {
         out << "Will use up to " << omp_get_max_threads() << " threads on the CPU." << std::endl;
         if(checkpoint) {
             auto checkpointPath = checkpoint->checkpoint_path();
-            out << "Checkpoint file will be written to `" << checkpointPath.string() << "'." << std::endl;
+            out << "Checkpoint file will be written to `" << checkpointPath.string() 
+                << "' (period is " << checkpoint->period() << ")." << std::endl;
             out << "Use `--resume " << checkpointPath << "' to resume execution." << std::endl;
         }
         {
             timer tfTimer{"Trial factoring took ", out};
 
 #ifdef CUTRIALDIVE_ENABLE_GPU
-            device_trial_factor<NumberSequenceT>(opts, results, out, checkpoint, resumeState);
+            device_trial_factor<NumberSequenceT>(opts, runtimeOpts, results, out, checkpoint, resumeState);
 #else
-            host_trial_factor<NumberSequenceT>(opts, results, out, checkpoint, resumeState);
+            host_trial_factor<NumberSequenceT>(opts, runtimeOpts, results, out, checkpoint, resumeState);
 #endif
         }
         (output_ptr ? *output_ptr.get() : out) << results;

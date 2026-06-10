@@ -17,6 +17,13 @@ namespace cutrialdive {
             : noPath) << "'";
         return out;
     }
-    
+
+    tf_runtime_options tf_runtime_options::default_options()
+    {
+        return tf_runtime_options{
+            .checkpoint_period = std::chrono::seconds{360},
+            .progress_period = std::chrono::milliseconds{1000}
+        };
+    }
 
 }

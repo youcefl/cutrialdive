@@ -77,6 +77,8 @@ namespace cutrialdive {
         /// Returns the path of the checkpoint file
         std::filesystem::path checkpoint_path() const;
 
+        std::chrono::seconds period() const;
+
         /// Returns true if (and only if) a checkpoint file has to be written
         bool due() const;
 
@@ -87,6 +89,7 @@ namespace cutrialdive {
         static std::optional<checkpoint_data> load(std::filesystem::path const & checkpointPath);
 
         void end();
+    
     private:
         job_spec job_spec_;
         std::filesystem::path checkpoint_path_;

@@ -135,6 +135,11 @@ namespace cutrialdive {
         return checkpoint_path_;
     }
 
+    std::chrono::seconds checkpoint_manager::period() const
+    {
+        return checkpointing_period_;
+    }
+
     bool checkpoint_manager::due() const
     {
         return std::chrono::steady_clock::now() - last_write_time_

@@ -5,8 +5,9 @@
 #pragma once
 
 #include <cstdint>
-#include <ostream>
 #include <optional>
+#include <ostream>
+#include <chrono>
 #include <filesystem>
 
 
@@ -33,4 +34,13 @@ namespace cutrialdive {
     };
 
     std::ostream & operator<<(std::ostream & out, trial_factoring_options const & options);
+
+    /// Execution options
+    struct tf_runtime_options
+    {
+        std::chrono::seconds checkpoint_period;
+        std::chrono::milliseconds progress_period;
+
+        static tf_runtime_options default_options();
+    };
 }

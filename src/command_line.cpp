@@ -51,23 +51,47 @@ namespace {
     void parse_num_seq(command_line_options & options, char**& argv, ExceptionBuilder buildException)
     {
         if(!eat_valued_option<std::string>("--num-seq", argv, buildException, [&](auto numSeqSpec) {
-                try {
-                    auto commaPos = numSeqSpec.find(',');
-                    if(commaPos != std::string::npos) {
-                        auto numSeqIdAsStr = numSeqSpec.substr(0, commaPos);
-                        options.seq_id = num_seq_id_from_string(numSeqIdAsStr);
-                        options.seq_params = numSeqSpec.substr(commaPos + 1);
-                        if(options.seq_params.empty()) {
-                            throw buildException("Invalid value for option --num-seq");
-                        }
-                    } else {
-                        options.seq_id = num_seq_id_from_string(numSeqSpec);
+            try {
+                auto commaPos = numSeqSpec.find(',');
+                if(commaPos != std::string::npos) {
+                    auto numSeqIdAsStr = numSeqSpec.substr(0, commaPos);
+                    options.seq_id = num_seq_id_from_string(numSeqIdAsStr);
+                    options.seq_params = numSeqSpec.substr(commaPos + 1);
+                    if(options.seq_params.empty()) {
+                        throw buildException("Invalid value for option --num-seq");
                     }
-                } catch (std::exception const & ex) {
-                    throw buildException(ex.what());
+                } else {
+                    options.seq_id = num_seq_id_from_string(numSeqSpec);
                 }
-            })) {
+            } catch (std::exception const & ex) {
+                throw buildException(ex.what());
+            }
+        })) {
            throw buildException("Invalid command line, option --num-seq must come first");
+        }
+    }
+
+    template <typename ExceptionBuilder>
+    inline
+    void parse_resume(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    {
+        options.is_resuming = false;
+        bool haveChkpntPeriod = false;
+        for(; *argv; ++argv) {
+            eat_valued_option<std::string>("--resume", argv, buildException, [&](auto chkpntPath){
+                options.is_resuming = true;
+                options.checkpoint_path = chkpntPath;
+            });
+            eat_valued_option<uint32_t>("--checkpoint-period", argv, buildException, [&](auto chkpntPeriod){
+                options.checkpoint_period = chkpntPeriod;
+                haveChkpntPeriod = true;
+            });
+            if(!options.is_resuming && !haveChkpntPeriod) {
+                return;
+            }
+        }
+        if(haveChkpntPeriod && !options.is_resuming) {
+            throw buildException("Invalid command line, option --checkpoint-period is unexpected");
         }
     }
 }
@@ -103,31 +127,21 @@ namespace cutrialdive {
                 return;
             }
         }
-        auto buildException = [](auto msg){ return command_line_parse_exception{msg}; };
-        if(argc == 3) {
-            auto ppargv = argv + 1;
-            std::filesystem::path checkpointPath;
-            if(!eat_valued_option<std::string>("--resume", ppargv, buildException,
-                        [&checkpointPath](auto path){ checkpointPath = path; })) {
-                wants_usage_ = true;
-                return;
-            }
-            options_ = command_line_options{};
-            options_->is_resuming = true;
-            options_->checkpoint_path = checkpointPath;
-            return;
-        }
-        if(argc <= 4) {
-            wants_usage_ = true;
-            return;
-        }
-        auto ppargv = argv + 1;
 
-        trial_factoring_options tfOptions{};
+        auto ppargv = argv + 1;
+        auto buildException = [](auto msg){ return command_line_parse_exception{msg}; };
         options_ = command_line_options{};
+
+        parse_resume(*options_, ppargv, buildException);
+        if(options_->is_resuming) {
+            return;
+        }
+
         parse_num_seq(*options_, ppargv, buildException);
 
+        trial_factoring_options tfOptions{};
         bool haveStart{}, haveEnd{}, haveTfBits{}, haveTfStart{}, haveTfEnd{};
+
         for(; *ppargv; ++ppargv) {
             if(eat_valued_option<uint64_t>("--print", ppargv, buildException, [this](auto n) {
                 options_->wants_value = true;
@@ -183,6 +197,9 @@ namespace cutrialdive {
             }
             eat_valued_option<std::string>("--output", ppargv, buildException,
                         [&tfOptions](auto path){ tfOptions.output_path = path; });
+            eat_valued_option<uint32_t>("--checkpoint-period", ppargv, buildException, [&](auto chkpntPeriod){
+                options_->checkpoint_period = chkpntPeriod;
+            });
         }
         auto mandatoryFlags = std::array{haveStart, haveTfStart || haveTfBits, haveTfEnd || haveTfBits};
         if(std::any_of(std::begin(mandatoryFlags), std::end(mandatoryFlags), [](auto val){ return !val; })) {
@@ -214,6 +231,7 @@ namespace cutrialdive {
                                         | --tf-start f0 --tf-end f1 )
                           [--no-progress]
                           [--output <output_path>]
+                          [--checkpoint-period chkpnt_period]
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
 R"-(                        | --single-prp n [--factors "f_1, ..., f_m"
@@ -222,6 +240,7 @@ R"-(                        | --single-prp n [--factors "f_1, ..., f_m"
 #endif // CUTRIALDIVE_ENABLE_PRP
 R"-(                        )
                 )
+              | --resume <checkpoint_path> [--checkpoint-period chkpnt_period]
               )
 )-"
         ;

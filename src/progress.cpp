@@ -46,8 +46,9 @@ namespace {
 
 namespace cutrialdive {
 
-    progress::progress(uint64_t target, std::ostream & out)
+    progress::progress(uint64_t target, std::chrono::milliseconds period, std::ostream & out)
         : target_(target)
+        , period_(period)
         , out_(out)
         , ended_(false)
         , target_digits_(digits_in_base<10>(target_))
@@ -69,7 +70,7 @@ namespace cutrialdive {
         constexpr auto outFactor = 100'000'000.0;
 
         auto now = std::chrono::steady_clock::now();
-        if((std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_time_).count() < 500)
+        if((std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_time_) < period_)
           && (current != target_)) {
             return;
         }

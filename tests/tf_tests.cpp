@@ -74,7 +74,7 @@ TEST_CASE("TF Mersenne")
             maxFactorsPerNumber, isProgressEnabled};
     std::ostringstream ostr;
 
-    auto results = trial_factor(num_seq_spec{num_seq_id::mersenne}, tfOpts, ostr);
+    auto results = trial_factor(num_seq_spec{num_seq_id::mersenne}, tfOpts, tf_runtime_options::default_options(), ostr);
 
     REQUIRE(results.n0() == 1);
     REQUIRE(results.size() == 100);

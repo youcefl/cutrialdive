@@ -20,8 +20,11 @@ namespace cutrialdive {
 
     struct command_line_options
     {
+        ///
         bool is_resuming;
         std::optional<std::filesystem::path> checkpoint_path;
+        std::optional<std::uint32_t> checkpoint_period;
+
         num_seq_id seq_id;
         std::string seq_params;
         bool wants_value;

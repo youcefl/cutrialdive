@@ -20,7 +20,8 @@ namespace {
     using namespace cutrialdive;
 
     template <typename IndexT>
-    int print_value(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
+    int print_value(num_seq_spec numSeqSpec, IndexT n, std::ostream& out)
+    {
         return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
             if constexpr(HasValuePrinter<Seq>) {
                 Seq{}.print_value(n, out) << std::endl;
@@ -32,7 +33,8 @@ namespace {
     }
 
     template <typename IndexT>
-    int print_expression(num_seq_spec numSeqSpec, IndexT n, std::ostream& out) {
+    int print_expression(num_seq_spec numSeqSpec, IndexT n, std::ostream& out)
+    {
         return dispatch_num_seq<IndexT>(numSeqSpec, [&]<typename Seq>() {
             if constexpr(HasExpressionPrinter<Seq>) {
                 Seq{}.print_expression(n, out) << std::endl;
@@ -41,6 +43,15 @@ namespace {
             }
             return 0;
         });
+    }
+
+    tf_runtime_options get_runtime_options(command_line_options const & cmdOpts)
+    {
+        auto runtimeOpts = tf_runtime_options::default_options();
+        if(cmdOpts.checkpoint_period) {
+            runtimeOpts.checkpoint_period = std::chrono::seconds{*cmdOpts.checkpoint_period};
+        }
+        return runtimeOpts;
     }
 }
 
@@ -67,7 +78,7 @@ int main(int argc, char** argv)
         }
         auto options = *parser.get_options();
         if(options.is_resuming) {
-            ctd::resume_trial_factoring(options.checkpoint_path.value(), std::cout);
+            ctd::resume_trial_factoring(options.checkpoint_path.value(), get_runtime_options(options), std::cout);
         }
         auto numSeqSpec = num_seq_spec{options.seq_id, options.seq_params};
         if(options.wants_value) {
@@ -87,7 +98,7 @@ int main(int argc, char** argv)
             return 0;
         }
 #endif
-        ctd::trial_factor(numSeqSpec, *options.tf_options, std::cout);
+        ctd::trial_factor(numSeqSpec, *options.tf_options, get_runtime_options(options), std::cout);
     } catch(std::exception const & e) {
         std::cerr << e.what() << std::endl;
         return 1;

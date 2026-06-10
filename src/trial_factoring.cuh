@@ -238,6 +238,7 @@ namespace cutrialdive {
     inline
     void device_trial_factor(
         trial_factoring_options const & opts,
+        tf_runtime_options const & runtimeOpts,
         factoring_results<uint64_t, uint32_t> & results,
         std::ostream & out,
         checkpoint_manager * checkpoint = nullptr,
@@ -263,7 +264,7 @@ namespace cutrialdive {
                 : device_factors_buffer<uint64_t>{opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number};
 
         if(resumeState) {
-            out << "Resuming at smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
+            out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
         }
 
         NumberSequenceT numSeq;
@@ -271,7 +272,7 @@ namespace cutrialdive {
         device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{
             numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
-        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, out) 
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, runtimeOpts.progress_period, out) 
                                                         : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
             ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
