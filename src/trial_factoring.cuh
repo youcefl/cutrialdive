@@ -21,6 +21,7 @@
 #include "number_sequence.hpp"
 #include "number_sequence_helpers.hpp"
 #include "progress.hpp"
+#include "checkpoint.hpp"
 
 
 namespace cutrialdive {
@@ -216,7 +217,7 @@ namespace cutrialdive {
         cudaDeviceProp props;
         auto cuStatus = cudaGetDeviceProperties(&props, device_id);
         if (cuStatus == cudaSuccess) {
-            out << "GPU device " << device_id << ": " << props.name
+            out << "Using GPU device " << device_id << ": " << props.name
                 << " (" << std::setprecision(3) << double(props.totalGlobalMem) / (1024.0 * 1024 * 1024) << " GiB)\n";
         } else {
             out << "Error while getting device info: " << cudaGetErrorString(cuStatus) << std::endl;
@@ -238,11 +239,12 @@ namespace cutrialdive {
     void device_trial_factor(
         trial_factoring_options const & opts,
         factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out
+        std::ostream & out,
+        checkpoint_manager * checkpoint = nullptr,
+        engine_state * resumeState = nullptr
         )
     {
         print_gpu_device_info(0, out);
-
 
         int numSMs;
         cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
@@ -256,7 +258,13 @@ namespace cutrialdive {
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
 
-        device_factors_buffer<uint64_t> factorsBuffer{opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number};
+        device_factors_buffer<uint64_t> factorsBuffer = resumeState 
+                ? device_factors_buffer<uint64_t>{resumeState->factors_buffer.get()}
+                : device_factors_buffer<uint64_t>{opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number};
+
+        if(resumeState) {
+            out << "Resuming at smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
+        }
 
         NumberSequenceT numSeq;
 
@@ -272,7 +280,7 @@ namespace cutrialdive {
             : std::function<void(uint64_t, uint64_t)>{[](auto, auto) {}};
 
         // Special treatment for 2 if needed
-        auto f0 = opts.f0;
+        auto f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         if(f0 <= 2 && opts.f1 > 2) {
             f0 = 3;
             trial_div_by_2<NumberSequenceT, uint64_t, precomputeReciprocals><<<1, 1>>>(tf_data.device_view());
@@ -280,6 +288,7 @@ namespace cutrialdive {
 
         constexpr auto segmentLen = uint64_t{1} << 25;
         auto const f1 = opts.f1;
+        auto lastPrimeOfPreviousSeg = decltype(primes)::value_type{};
 
         // Main loop for odd primes only
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
@@ -299,6 +308,16 @@ namespace cutrialdive {
 
             device_synchronize(out);
 
+            if(lastPrimeOfPreviousSeg) {
+                updateProgress(fx, lastPrimeOfPreviousSeg);
+                if(checkpoint && checkpoint->due()) {
+                    checkpoint->write(engine_state{
+                        lastPrimeOfPreviousSeg,
+                        factors_buffer_holder{factorsBuffer.to_host_factors_buffer<uint64_t>()}
+                    });
+                }
+            }
+
             auto copyPrimeDataToHostStart = std::chrono::high_resolution_clock::now();
             devicePrimeData.copy_from_host(primes, primeData);
             copyPrimeDataToHostTime += delta_now(copyPrimeDataToHostStart);
@@ -313,14 +332,17 @@ namespace cutrialdive {
             }
             auto err = cudaGetLastError();
             if(err != cudaSuccess) {
-                out << "Error executing kernel" << std::endl;
+                out << "Error executing trial division kernel" << std::endl;
                 out << "Launch error: " << cudaGetErrorString(err) << std::endl;
             }
-            updateProgress(fy, !primes.empty() ? primes.back() : 0);
+            lastPrimeOfPreviousSeg = !primes.empty() ? primes.back() : 0;
         }
         device_synchronize(out);
         if(progressHandler) {
             progressHandler->end();
+        }
+        if(checkpoint) {
+            checkpoint->end();
         }
 
         auto tfEnd = std::chrono::high_resolution_clock::now();

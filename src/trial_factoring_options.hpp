@@ -28,6 +28,8 @@ namespace cutrialdive {
         uint32_t max_factors_per_number{128};
         /// @brief Whether to display progress
         bool is_progress_enabled{true};
+
+        bool operator==(trial_factoring_options const&) const = default;        
     };
 
     std::ostream & operator<<(std::ostream & out, trial_factoring_options const & options);

@@ -55,13 +55,13 @@ namespace {
                     auto commaPos = numSeqSpec.find(',');
                     if(commaPos != std::string::npos) {
                         auto numSeqIdAsStr = numSeqSpec.substr(0, commaPos);
-                        options.num_seq_id_value = num_seq_id_from_string(numSeqIdAsStr);
-                        options.num_seq_params = numSeqSpec.substr(commaPos + 1);
-                        if(options.num_seq_params.empty()) {
+                        options.seq_id = num_seq_id_from_string(numSeqIdAsStr);
+                        options.seq_params = numSeqSpec.substr(commaPos + 1);
+                        if(options.seq_params.empty()) {
                             throw buildException("Invalid value for option --num-seq");
                         }
                     } else {
-                        options.num_seq_id_value = num_seq_id_from_string(numSeqSpec);
+                        options.seq_id = num_seq_id_from_string(numSeqSpec);
                     }
                 } catch (std::exception const & ex) {
                     throw buildException(ex.what());
@@ -103,6 +103,20 @@ namespace cutrialdive {
                 return;
             }
         }
+        auto buildException = [](auto msg){ return command_line_parse_exception{msg}; };
+        if(argc == 3) {
+            auto ppargv = argv + 1;
+            std::filesystem::path checkpointPath;
+            if(!eat_valued_option<std::string>("--resume", ppargv, buildException,
+                        [&checkpointPath](auto path){ checkpointPath = path; })) {
+                wants_usage_ = true;
+                return;
+            }
+            options_ = command_line_options{};
+            options_->is_resuming = true;
+            options_->checkpoint_path = checkpointPath;
+            return;
+        }
         if(argc <= 4) {
             wants_usage_ = true;
             return;
@@ -111,7 +125,6 @@ namespace cutrialdive {
 
         trial_factoring_options tfOptions{};
         options_ = command_line_options{};
-        auto buildException = [](auto msg){ return command_line_parse_exception{msg}; };
         parse_num_seq(*options_, ppargv, buildException);
 
         bool haveStart{}, haveEnd{}, haveTfBits{}, haveTfStart{}, haveTfEnd{};
@@ -164,7 +177,7 @@ namespace cutrialdive {
                 throw command_line_parse_exception{
                             "Mixing --tf-bits with --tf-start and --tf-end is not allowed"};
             }
-            if(!strcmp(*ppargv, "--no-progress")) {
+            if(*ppargv && !strcmp(*ppargv, "--no-progress")) {
                 tfOptions.is_progress_enabled = false;
                 continue;
             }

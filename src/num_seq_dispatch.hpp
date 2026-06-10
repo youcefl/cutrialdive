@@ -118,16 +118,16 @@ namespace cutrialdive {
     auto dispatch_num_seq(num_seq_spec numSeqSpec, Func&& func)
     {
         using details::dispatch_num_seq_impl;
-        auto numSeqId = numSeqSpec.num_seq_id_value;
+        auto numSeqId = numSeqSpec.seq_id;
         switch (numSeqId) {
             case num_seq_id::mersenne:
                 return dispatch_num_seq_impl<mersenne, IndexT>(func);
             case num_seq_id::smarandache: {
-                auto base = numSeqSpec.num_seq_params.empty()
+                auto base = numSeqSpec.seq_params.empty()
                             ? std::optional<uint64_t>{10}
-                            : details::parse_int<uint64_t>(numSeqSpec.num_seq_params);
+                            : details::parse_int<uint64_t>(numSeqSpec.seq_params);
                 if(!base) {
-                    throw std::runtime_error{"Invalid base `" + numSeqSpec.num_seq_params + "' for Smarandache numbers"};
+                    throw std::runtime_error{"Invalid base `" + numSeqSpec.seq_params + "' for Smarandache numbers"};
                 }
                 return details::dispatch_smarandache<IndexT>(*base, func);
             }

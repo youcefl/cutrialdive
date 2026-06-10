@@ -27,6 +27,9 @@ namespace cutrialdive {
     /// Sorts the factors in the given span (from lowest to highest)
     template <typename PrimeT, typename ExponentT>
     void sort_factors(std::span<factor<PrimeT, ExponentT>> span);
+    /// Sorts the factors in the given span (from lowest to highest)
+    template <typename PrimeT>
+    void sort_factors(std::span<PrimeT> span);
 
     /// Outputs a factor to the given stream
     template <typename PrimeT, typename ExponentT>
@@ -46,6 +49,15 @@ namespace cutrialdive {
     {
         std::sort(std::begin(span), std::end(span), [](auto const & x, auto const & y) {
             return x.prime < y.prime;
+        });
+    }
+
+    template <typename PrimeT>
+    inline
+    void sort_factors(std::span<PrimeT> span)
+    {
+        std::sort(std::begin(span), std::end(span), [](auto const & x, auto const & y) {
+            return x < y;
         });
     }
 

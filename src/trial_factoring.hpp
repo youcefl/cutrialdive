@@ -5,6 +5,8 @@
 #pragma once
 
 #include <ostream>
+#include <filesystem>
+
 #include "num_seq_spec.hpp"
 #include "trial_factoring_options.hpp"
 #include "factoring_results.hpp"
@@ -20,4 +22,12 @@ namespace cutrialdive {
         std::ostream & out
     );
 
+    /// Resumes a trial factoring
+    /// @param[in] checkpointPath path of the checkpoint file
+    /// @param[in/out] out stream where to write user messages
+    factoring_results<uint64_t, uint32_t>
+    resume_trial_factoring(
+        std::filesystem::path const & checkpointPath,
+        std::ostream & out
+    );
 }

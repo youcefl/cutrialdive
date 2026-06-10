@@ -27,6 +27,7 @@
 #include "barrett_reciprocals.hpp"
 #include "builtin_number_sequences.hpp"
 #include "progress.hpp"
+#include "checkpoint.hpp"
 
 
 namespace cutrialdive {
@@ -58,12 +59,22 @@ namespace detail {
     void host_trial_factor(
         trial_factoring_options const & opts,
         factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out
+        std::ostream & out,
+        checkpoint_manager * checkpoint = nullptr,
+        engine_state * resumeState = nullptr
         )
     {
-        uint64_t n0 = opts.n0, n1 = opts.n1, f0 = opts.f0, f1 = opts.f1;
+        uint64_t n0 = opts.n0, n1 = opts.n1;
+        uint64_t f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
+        uint64_t f1 = opts.f1;
 
-        factors_buffer<uint64_t, uint32_t> factors_buf{n0, n1 - n0, opts.max_factors_per_number};
+        if(resumeState) {
+            out << "Resuming at next_prime(" << resumeState->last_processed_prime << ")" << std::endl;
+        }
+
+        factors_buffer<uint64_t> factorsBuf = resumeState 
+                ? std::move(resumeState->factors_buffer.get())
+                : factors_buffer<uint64_t>{n0, n1 - n0, opts.max_factors_per_number};
 
         NumberSequenceT numSeq;
 
@@ -80,12 +91,12 @@ namespace detail {
             f0 = 3;
             auto residue = value_mod_2(numSeq, n0);
             if(!residue) {
-                factors_buf.push_factor(0, 2);
+                factorsBuf.push_factor(0, 2);
             }
             for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
                 residue = next_value_mod_2(numSeq, residue, n);
                 if(!residue) {
-                    factors_buf.push_factor(n + 1 - n0, 2);
+                    factorsBuf.push_factor(n + 1 - n0, 2);
                 }
             }
         }
@@ -125,7 +136,7 @@ namespace detail {
                     }
                 }();
                 if(!residue) {
-                    factors_buf.push_factor(0, p);
+                    factorsBuf.push_factor(0, p);
                 }
                 /// Propagate residues to next numbers in sequence
                 for(auto n = n0, nEnd = n1 - 1; n < nEnd; ++n) {
@@ -135,16 +146,25 @@ namespace detail {
                         residue = numSeq.next_value_mod(residue, n, p);
                     }
                     if(!residue) {
-                        factors_buf.push_factor(n + 1 - n0, p);
+                        factorsBuf.push_factor(n + 1 - n0, p);
                     }
                 }
             }
             updateProgress(fy, !primes.empty() ? primes.back() : 0);
+            if(!primes.empty() && checkpoint && checkpoint->due()) {
+                checkpoint->write(engine_state{
+                    primes.back(),
+                    factors_buffer_holder{&factorsBuf}
+                });
+            }
         }
         if(progressHandler) {
             progressHandler->end();
         }
-        results = factors_buf.to_factoring_results();
+        if(checkpoint) {
+            checkpoint->end();
+        }
+        results = factorsBuf.to_factoring_results<uint64_t, uint32_t>();
     }
 
 
@@ -153,7 +173,9 @@ namespace detail {
     void trial_factor(
         trial_factoring_options const & opts,
         factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out
+        std::ostream & out,
+        checkpoint_manager * checkpoint =  nullptr,
+        engine_state * resumeState = nullptr
     )
     {
         if(opts.n1 <= opts.n0) {
@@ -168,7 +190,7 @@ namespace detail {
         std::unique_ptr<std::ofstream> output_ptr;
         if(opts.output_path) {
             auto path = opts.output_path.value();
-            if(std::filesystem::exists(path)) {
+            if(!checkpoint && std::filesystem::exists(path)) {
                 std::string msg{"Output: cannot overwrite existing file "};
                 msg += path.string();
                 throw std::runtime_error(msg);
@@ -188,14 +210,18 @@ namespace detail {
             << std::endl;
         out << "TF range is [" << opts.f0 << ", " << opts.f1 << "[." << std::endl;
         out << "Will use up to " << omp_get_max_threads() << " threads on the CPU." << std::endl;
-
+        if(checkpoint) {
+            auto checkpointPath = checkpoint->checkpoint_path();
+            out << "Checkpoint file will be written to `" << checkpointPath.string() << "'." << std::endl;
+            out << "Use `--resume " << checkpointPath << "' to resume execution." << std::endl;
+        }
         {
             timer tfTimer{"Trial factoring took ", out};
 
 #ifdef CUTRIALDIVE_ENABLE_GPU
-            device_trial_factor<NumberSequenceT>(opts, results, out);
+            device_trial_factor<NumberSequenceT>(opts, results, out, checkpoint, resumeState);
 #else
-            host_trial_factor<NumberSequenceT>(opts, results, out);
+            host_trial_factor<NumberSequenceT>(opts, results, out, checkpoint, resumeState);
 #endif
         }
         (output_ptr ? *output_ptr.get() : out) << results;

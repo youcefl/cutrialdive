@@ -6,9 +6,12 @@
 
 #include <cstdint>
 
+#include "common_defines.h"
 #include "device_span.hpp"
 #include "device_vector.hpp"
+#include "factors_buffer.hpp"
 #include "factoring_results.hpp"
+
 
 namespace cutrialdive {
 
@@ -18,6 +21,9 @@ namespace cutrialdive {
     {
     public:
         device_factors_buffer(uint64_t n0, uint64_t numbersCount, uint32_t maxFactorsPerNumber);
+        /// Constructs an instance from a host factors_buffer
+        template <typename PrimeT>
+        device_factors_buffer(factors_buffer<PrimeT> const & factorsBuf);
         
         struct device_view_t {
             device_span<uint32_t> counts;
@@ -29,13 +35,18 @@ namespace cutrialdive {
 
         device_view_t device_view() const;
 
+        /// Returns factoring results suitable for writing in the output file
         template <typename PrimeT, typename ExponentT>
         factoring_results<PrimeT, ExponentT> to_factoring_results() const;
+
+        template <typename PrimeT>
+        factors_buffer<PrimeT> to_host_factors_buffer() const;
 
     private:
         device_vector<uint32_t> factors_count_;
         device_vector<uint64_t> factors_;
         uint32_t const max_factors_per_number_;
+        uint64_t numbers_count_;
         uint64_t n0_;
     };
 }
@@ -46,10 +57,38 @@ namespace cutrialdive {
     inline
     device_factors_buffer<ValueT>::device_factors_buffer(uint64_t n0, uint64_t numbersCount, uint32_t maxFactorsPerNumber)
         : max_factors_per_number_(maxFactorsPerNumber)
+        , numbers_count_(numbersCount)
         , n0_(n0)
     {
         factors_count_.assign_zero(numbersCount);
         factors_.resize(max_factors_per_number_ * numbersCount);
+    }
+
+    template <typename ValueT>
+    template <typename PrimeT>
+    inline
+    device_factors_buffer<ValueT>::device_factors_buffer<PrimeT>(
+        factors_buffer<PrimeT> const & factorsBuf
+      ) : max_factors_per_number_(factorsBuf.max_factors_per_number_)
+        , numbers_count_(factorsBuf.numbers_count_)
+        , n0_(factorsBuf.n0_)
+    {
+        factors_count_.resize(factorsBuf.factors_count_.size());
+        copy_to_device(factors_count_.data(), &factorsBuf.factors_count_[0], factors_count_.size());
+        factors_.resize(factorsBuf.factors_.size());
+        copy_to_device(factors_.data(), & factorsBuf.factors_[0], factors_.size());
+    }
+
+    template <typename ValueT>
+    template <typename PrimeT>
+    inline
+    factors_buffer<PrimeT> device_factors_buffer<ValueT>::to_host_factors_buffer() const
+    {
+        static_assert(std::is_same_v<PrimeT, ValueT>); // PrimeT != ValueT not supported
+        factors_buffer<PrimeT> factorsBuf{n0_, numbers_count_, max_factors_per_number_};
+        copy_from_device(&factorsBuf.factors_count_[0], factors_count_.data(), factors_count_.size());
+        copy_from_device(&factorsBuf.factors_[0], factors_.data(), factors_.size());
+        return std::move(factorsBuf);
     }
 
     template <typename ValueT>
@@ -76,27 +115,7 @@ namespace cutrialdive {
     inline
     factoring_results<PrimeT, ExponentT> device_factors_buffer<ValueT>::to_factoring_results() const
     {
-        factoring_results<PrimeT, ExponentT> results{n0_, factors_count_.size()};
-        auto factorsCount = factors_count_.to_host();
-        auto allFactors = factors_.to_host();
-        std::vector<factor<PrimeT, ExponentT>> currentFactors;
-        currentFactors.reserve(max_factors_per_number_);
-        std::size_t i = 0;
-        for(auto count : factorsCount) {
-            if (count > max_factors_per_number_) {
-                // @todo: report maximum number of factors per number exceeded while processing S(i)
-                count = max_factors_per_number_;
-            }
-            currentFactors.clear();
-            for(auto k = i * max_factors_per_number_; k < i * max_factors_per_number_ + count; ++k) {
-                currentFactors.push_back(factor<PrimeT, ExponentT>{allFactors[k], ExponentT{1}});
-            }
-            auto span = std::span{std::begin(currentFactors), std::end(currentFactors)};
-            sort_factors(span);
-            results.add_factors(span);
-            ++i;
-        }
-        return results;
+        return to_host_factors_buffer<PrimeT>().template to_factoring_results<PrimeT, ExponentT>();
     }
 
 }

@@ -13,7 +13,10 @@ namespace cutrialdive {
     /// Number sequence specification
     struct num_seq_spec
     {
-        num_seq_id num_seq_id_value;
-        std::string num_seq_params;
+        num_seq_id seq_id;
+        std::string seq_params;
+
+        bool operator==(num_seq_spec const&) const = default;        
     };
+
 }

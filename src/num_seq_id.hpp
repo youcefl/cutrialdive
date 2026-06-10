@@ -10,7 +10,7 @@
 namespace cutrialdive {
 
     /// Available number sequence ids
-    enum class num_seq_id {
+    enum class num_seq_id : uint32_t {
         mersenne,
         smarandache
     };

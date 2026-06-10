@@ -38,7 +38,10 @@ namespace cutrialdive {
         void reserve(std::size_t factorsCount);
 
         /// Adds the factors for current number
-        void add_factors(std::span<factor<ValueT, ExponentT>> factors);
+        void add_factors_with_exp(std::span<factor<ValueT, ExponentT>> factors);
+        /// @overload
+        template <typename PrimeT>
+        void add_factors(std::span<PrimeT> factors);
 
         /// Location of the set of factors of a number
         struct location {
@@ -113,7 +116,7 @@ namespace cutrialdive {
 
     template <typename ValueT, typename ExponentT>
     inline
-    void factoring_results<ValueT, ExponentT>::add_factors(std::span<factor<ValueT, ExponentT>> newFactors)
+    void factoring_results<ValueT, ExponentT>::add_factors_with_exp(std::span<factor<ValueT, ExponentT>> newFactors)
     {
         auto offset = factors_.size();
         auto length = newFactors.size();
@@ -125,6 +128,19 @@ namespace cutrialdive {
         std::cout << std::endl;
 #endif
         factors_.insert(std::end(factors_), std::begin(newFactors), std::end(newFactors));
+        locations_.push_back({offset, length});
+    }
+
+    template <typename ValueT, typename ExponentT>
+    template <typename PrimeT>
+    inline
+    void factoring_results<ValueT, ExponentT>::add_factors(std::span<PrimeT> newFactors)
+    {
+        auto offset = factors_.size();
+        auto length = newFactors.size();
+        std::for_each(std::begin(newFactors), std::end(newFactors), [&](auto const & prime){
+            factors_.emplace_back(prime, ExponentT{1});
+        });
         locations_.push_back({offset, length});
     }
 

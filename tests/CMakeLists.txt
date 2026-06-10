@@ -26,10 +26,12 @@ if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
 endif()
 
 set(SOURCES
-    test_modular.cpp
+    checkpointing_tests.cpp
+    filesystem_helper.cpp
     mersenne_tests.cpp
     smarandache_tests.cpp
     smarandache_gp_tests.cpp
+    test_modular.cpp
     tf_tests.cpp
 )
 if(CUTRIALDIVE_ENABLE_GPU)

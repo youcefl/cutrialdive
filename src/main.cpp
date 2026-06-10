@@ -66,7 +66,10 @@ int main(int argc, char** argv)
             return ctd::autotest();
         }
         auto options = *parser.get_options();
-        auto numSeqSpec = num_seq_spec{options.num_seq_id_value, options.num_seq_params};
+        if(options.is_resuming) {
+            ctd::resume_trial_factoring(options.checkpoint_path.value(), std::cout);
+        }
+        auto numSeqSpec = num_seq_spec{options.seq_id, options.seq_params};
         if(options.wants_value) {
             return print_value(numSeqSpec, options.n, std::cout);
         }
