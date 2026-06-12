@@ -20,12 +20,16 @@ namespace cutrialdive {
             tf_runtime_options const & runtimeOpts,
             std::ostream & out,
             checkpoint_manager * checkpoint,
-            engine_state * resumeState = nullptr
+            engine_state * resumeState
         )
         {
             factoring_results<uint64_t, uint32_t> results{opts.n0, opts.n1 - opts.n0};
-            dispatch_num_seq<decltype(opts.n0)>(numSeqSpec, [&]<typename Seq>() {
-                trial_factor<Seq>(opts, runtimeOpts, results, out, checkpoint, resumeState);
+            dispatch_num_seq<decltype(opts.n0)>(numSeqSpec, [&]<typename Seq, typename... Args>(Args&&... args) {
+                trial_factor<Seq>(trial_factoring_context{
+                    opts, runtimeOpts, results, out, checkpoint, resumeState
+                  },
+                  std::forward<Args>(args)...
+                );
             });
             return results;
         }
@@ -50,7 +54,7 @@ namespace cutrialdive {
                 job_spec{numSeqSpec, opts}
             );
         }
-        return trial_factor(numSeqSpec, opts, runtimeOpts, out, checkpoint.get());
+        return trial_factor(numSeqSpec, opts, runtimeOpts, out, checkpoint.get(), nullptr);
     }
 
     /// Resumes an interrupted trial factoring

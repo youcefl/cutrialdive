@@ -6,19 +6,19 @@
 
 #include <ostream>
 #include <string_view>
+#include <type_traits>
+#include <utility>
+
 #include "number_sequence_detail.hpp"
+
 
 namespace cutrialdive {
 
     template <typename Seq>
-    concept NumberSequence = requires(Seq seq)
+    concept PureMathSequence = requires(Seq seq)
     {
         typename Seq::index_type;
         typename Seq::residue_type;
-
-        // A short name for the sequence e.g. M for Mersenne, Sm for Smarandache.
-        { seq.short_name() }
-            -> std::convertible_to<std::string_view>;
     }
     &&
     (
@@ -48,6 +48,9 @@ namespace cutrialdive {
     &&  HaveConsistentMuType<Seq>
     ;
 
+    template <typename Seq>
+    concept NumberSequence = 
+        PureMathSequence<details::math_sequence_type<Seq>>
+     && HasSequenceShortName<Seq>;
 }
-
 

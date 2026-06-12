@@ -22,6 +22,7 @@
 #include "number_sequence_helpers.hpp"
 #include "progress.hpp"
 #include "checkpoint.hpp"
+#include "trial_factoring_context.hpp"
 
 
 namespace cutrialdive {
@@ -235,16 +236,17 @@ namespace cutrialdive {
     }
 
     template <typename NumberSequenceT>
+        requires PureMathSequence<NumberSequenceT>
     inline
     void device_trial_factor(
-        trial_factoring_options const & opts,
-        tf_runtime_options const & runtimeOpts,
-        factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out,
-        checkpoint_manager * checkpoint = nullptr,
-        engine_state * resumeState = nullptr
+        trial_factoring_context & ctx,
+        NumberSequenceT numSeq
         )
     {
+        auto const & opts = ctx.options;
+        auto & out = ctx.output_stream;
+        auto resumeState = ctx.resume_state;
+        auto checkpoint = ctx.checkpoint;
         print_gpu_device_info(0, out);
 
         int numSMs;
@@ -267,12 +269,10 @@ namespace cutrialdive {
             out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
         }
 
-        NumberSequenceT numSeq;
-
         device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{
             numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
-        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, runtimeOpts.progress_period, out) 
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, ctx.runtime_options.progress_period, out) 
                                                         : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
             ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
@@ -354,7 +354,7 @@ namespace cutrialdive {
         }
         out << "Copying prime data to device took " << copyPrimeDataToHostTime << "s (cumulated time)" << std::endl;
 
-        results = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
+        ctx.results = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
 
         out << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 

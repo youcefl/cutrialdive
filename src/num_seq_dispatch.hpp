@@ -24,10 +24,10 @@ namespace cutrialdive {
 namespace cutrialdive {
     namespace details {
         ///
-        template <typename NumberSequenceT, typename IndexT, typename Func>
-        auto dispatch_num_seq_impl(Func&& func)
+        template <typename NumberSequenceT, typename IndexT, typename Func, typename... Args>
+        auto dispatch_num_seq_impl(Func&& func, Args&&...args)
         {
-            return func.template operator()<NumberSequenceT>();
+            return func.template operator()<NumberSequenceT>(std::forward<Args>(args)...);
         }
 
         template <typename IntT>
@@ -122,6 +122,13 @@ namespace cutrialdive {
         switch (numSeqId) {
             case num_seq_id::mersenne:
                 return dispatch_num_seq_impl<mersenne, IndexT>(func);
+            case num_seq_id::proth: {
+                auto k = details::parse_int<uint64_t>(numSeqSpec.seq_params);
+                if(!k) {
+                    throw std::runtime_error{"Missing or invalid k value `" + numSeqSpec.seq_params + "' in Proth number spec"};
+                }
+                return dispatch_num_seq_impl<proth, IndexT>(func, *k);
+            }
             case num_seq_id::smarandache: {
                 auto base = numSeqSpec.seq_params.empty()
                             ? std::optional<uint64_t>{10}

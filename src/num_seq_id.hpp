@@ -10,8 +10,10 @@
 namespace cutrialdive {
 
     /// Available number sequence ids
-    enum class num_seq_id : uint32_t {
+    enum class num_seq_id : uint32_t
+    {
         mersenne,
+        proth,
         smarandache
     };
 
@@ -33,6 +35,7 @@ namespace cutrialdive {
     {
         switch(numSeqId) {
             case num_seq_id::mersenne: return {"mersenne"};
+            case num_seq_id::proth: return {"proth"};
             case num_seq_id::smarandache: return {"smarandache"};
         }
         return "<unknown number sequence id>";

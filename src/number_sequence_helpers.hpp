@@ -30,5 +30,15 @@ namespace cutrialdive {
             return seq.next_value_mod(r, n, 2);
         }
     }
+
+    template <typename NumberSequenceT>
+    auto short_name(NumberSequenceT seq)
+    {
+        if constexpr(HasShortName<NumberSequenceT>) {
+            return seq.short_name();
+        } else {
+            return get_math_sequence(seq).short_name();
+        }
+    }
 }
 

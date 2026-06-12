@@ -5,6 +5,8 @@
 #pragma once
 
 #include <concepts>
+#include <ostream>
+#include <string_view>
 
 #include "barrett_mu_types.hpp"
 
@@ -12,6 +14,25 @@
 namespace cutrialdive {
 
     /// N.B.: below S(n) is used to designate the sequence being modelled by Seq.
+
+    template <typename T>
+    decltype(auto) get_math_sequence(T&& seq)
+    {
+        if constexpr(requires { seq.math_sequence(); }) {
+            return seq.math_sequence();
+        } else {
+            return std::forward<T>(seq);
+        }
+    }
+
+    namespace details {
+
+        template <typename Seq>
+        using math_sequence_type = typename std::remove_cvref_t<
+                decltype(get_math_sequence(std::declval<Seq>()))
+            >;
+
+    }
 
     /// Boolean indicating whether S(n0) mod d has to be computed by first computing S(n0) = seq.value(n0)
     /// and then reducing that value modulo d. If false then S(n0) mod d is computed by calling
@@ -159,12 +180,12 @@ namespace cutrialdive {
     concept HasExpressionPrinter =
         requires(
             Seq seq,
-            typename Seq::index_type n,
+            typename details::math_sequence_type<Seq>::index_type n,
             std::ostream & out
         )
     {
         {
-            seq.print_expression(n, out)
+            get_math_sequence(seq).print_expression(n, out)
         } -> std::same_as<std::ostream &>;
     };
 
@@ -174,13 +195,29 @@ namespace cutrialdive {
     concept HasValuePrinter =
         requires(
             Seq seq,
-            typename Seq::index_type n,
+            typename details::math_sequence_type<Seq>::index_type n,
             std::ostream & out
         )
     {
         {
-            seq.print_value(n, out)
+            get_math_sequence(seq).print_value(n, out)
         } -> std::same_as<std::ostream &>;
     };
+
+    template <typename Seq>
+    concept HasShortName =
+        requires(
+            Seq seq
+        )
+    {
+        {
+            seq.short_name()
+        } -> std::convertible_to<std::string_view>;
+    };
+
+    template <typename Seq>
+    concept HasSequenceShortName =
+        HasShortName<Seq>
+     || HasShortName<details::math_sequence_type<Seq>>;
 
 }

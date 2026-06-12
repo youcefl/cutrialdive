@@ -10,6 +10,7 @@
 #include "gw_utility.h"
 #include "number_sequence.hpp"
 #include "builtin_number_sequences.hpp"
+#include "number_sequence_helpers.hpp"
 #include "timer.hpp"
 #include "num_seq_dispatch.hpp"
 
@@ -30,13 +31,16 @@ namespace cutrialdive {
     void run_prp_test(uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,
-        std::ostream & out
+        std::ostream & out,
+        auto&&... args
     )
     {
-        std::string const numberAsStr = NumberSequenceT::short_name() + ("(" + std::to_string(n)) + ")";
+        NumberSequenceT numSeq{std::forward<decltype(args)>(args)...};
+        std::string const numberAsStr = short_name(numSeq) + ("(" + std::to_string(n)) + ")";
+        auto pureSeq = get_math_sequence(numSeq);
         HgInt cofactor;
         {
-            auto number = NumberSequenceT::value(n);
+            auto number = pureSeq.value(n);
             timer t{(std::string{"Computing the cofactor of "}
                         + numberAsStr + " took ").c_str(), out};
             out << "Boosting factors: " << std::boolalpha << haveToBoostFactors << std::endl;
@@ -71,8 +75,8 @@ namespace cutrialdive {
     {
         timer tfTimer{"PRP test took ", std::cout};
 
-        dispatch_num_seq<decltype(n)>(numSeqSpec, [&]<typename Seq>() {
-            run_prp_test<Seq>(n, factors, haveToBoostFactors, std::cout);
+        dispatch_num_seq<decltype(n)>(numSeqSpec, [&]<typename Seq, typename... Args>(Args&&... args) {
+            run_prp_test<Seq>(n, factors, haveToBoostFactors, std::cout, std::forward<Args>(args)...);
         });
     }
 

@@ -85,3 +85,25 @@ TEST_CASE("TF Mersenne")
 }
 
 
+TEST_CASE("TF Proth, k = 1279")
+{
+    constexpr auto maxFactorsPerNumber = 128;
+    constexpr auto isProgressEnabled = false;
+    trial_factoring_options tfOpts{0, 80, 0, 1u << 16, {},
+            maxFactorsPerNumber, isProgressEnabled};
+    std::ostringstream ostr;
+
+    auto results = trial_factor(num_seq_spec{num_seq_id::proth, "1279"},tfOpts, 
+                                tf_runtime_options::default_options(), ostr
+                               );
+
+    REQUIRE(results.n0() == 0);
+    REQUIRE(results.size() == 80);
+    auto pr_1279_79_factors = results[79];
+    REQUIRE(pr_1279_79_factors.size() == 2);
+    REQUIRE(pr_1279_79_factors[0].prime == 3);
+    REQUIRE(pr_1279_79_factors[0].exponent == 1);
+    REQUIRE(pr_1279_79_factors[1].prime == 2063);
+    REQUIRE(pr_1279_79_factors[1].exponent == 1);
+}
+

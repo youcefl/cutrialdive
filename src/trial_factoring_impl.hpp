@@ -28,6 +28,7 @@
 #include "builtin_number_sequences.hpp"
 #include "progress.hpp"
 #include "checkpoint.hpp"
+#include "trial_factoring_context.hpp"
 
 
 namespace cutrialdive {
@@ -55,16 +56,16 @@ namespace detail {
 
 
     template <typename NumberSequenceT>
-        requires NumberSequence<NumberSequenceT>
+        requires PureMathSequence<NumberSequenceT>
     void host_trial_factor(
-        trial_factoring_options const & opts,
-        tf_runtime_options const & runtimeOpts,
-        factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out,
-        checkpoint_manager * checkpoint = nullptr,
-        engine_state * resumeState = nullptr
+        trial_factoring_context& ctx,
+        NumberSequenceT numSeq
         )
     {
+        auto const & opts = ctx.options;
+        auto & out = ctx.output_stream;
+        auto resumeState = ctx.resume_state;
+        auto & results = ctx.results;
         uint64_t n0 = opts.n0, n1 = opts.n1;
         uint64_t f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         uint64_t f1 = opts.f1;
@@ -77,13 +78,12 @@ namespace detail {
                 ? std::move(resumeState->factors_buffer.get())
                 : factors_buffer<uint64_t>{n0, n1 - n0, opts.max_factors_per_number};
 
-        NumberSequenceT numSeq;
-
-        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(f1, runtimeOpts.progress_period, out)
+        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(f1, ctx.runtime_options.progress_period, out)
                                                         : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
-            ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
-                progressHandler->update(segUpperBound, lastPrimeInSeg); 
+            ? std::function<void(uint64_t, uint64_t)>{
+                [&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
+                    progressHandler->update(segUpperBound, lastPrimeInSeg); 
               }}
             : std::function<void(uint64_t, uint64_t)>{[](auto, auto) {}};
 
@@ -114,6 +114,7 @@ namespace detail {
         }();
         std::vector<uint64_t> primes;
         primes.reserve(max_num_of_primes);
+        auto checkpoint = ctx.checkpoint;
 
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
             fx < f1;
@@ -165,21 +166,21 @@ namespace detail {
         if(checkpoint) {
             checkpoint->end();
         }
-        results = factorsBuf.to_factoring_results<uint64_t, uint32_t>();
+        ctx.results = factorsBuf.to_factoring_results<uint64_t, uint32_t>();
     }
 
 
     template <typename NumberSequenceT>
         requires NumberSequence<NumberSequenceT>
     void trial_factor(
-        trial_factoring_options const & opts,
-        tf_runtime_options const & runtimeOpts,
-        factoring_results<uint64_t, uint32_t> & results,
-        std::ostream & out,
-        checkpoint_manager * checkpoint =  nullptr,
-        engine_state * resumeState = nullptr
+        trial_factoring_context&& ctx,
+        auto&&... args
     )
     {
+        auto const & opts = ctx.options;
+        auto & out = ctx.output_stream;
+        auto & results = ctx.results;
+
         if(opts.n1 <= opts.n0) {
             out << "Range [" << opts.n0 << ", " << opts.n1 << "[ is empty, no number to process..." << std::endl;
             return;
@@ -192,7 +193,7 @@ namespace detail {
         std::unique_ptr<std::ofstream> output_ptr;
         if(opts.output_path) {
             auto path = opts.output_path.value();
-            if(!checkpoint && std::filesystem::exists(path)) {
+            if(!ctx.checkpoint && std::filesystem::exists(path)) {
                 std::string msg{"Output: cannot overwrite existing file "};
                 msg += path.string();
                 throw std::runtime_error(msg);
@@ -212,6 +213,7 @@ namespace detail {
             << std::endl;
         out << "TF range is [" << opts.f0 << ", " << opts.f1 << "[." << std::endl;
         out << "Will use up to " << omp_get_max_threads() << " threads on the CPU." << std::endl;
+        auto checkpoint = ctx.checkpoint;
         if(checkpoint) {
             auto checkpointPath = checkpoint->checkpoint_path();
             out << "Checkpoint file will be written to `" << checkpointPath.string() 
@@ -221,10 +223,12 @@ namespace detail {
         {
             timer tfTimer{"Trial factoring took ", out};
 
+            NumberSequenceT numSeq{std::forward<decltype(args)>(args)...};
+            auto pureSeq = get_math_sequence(numSeq);
 #ifdef CUTRIALDIVE_ENABLE_GPU
-            device_trial_factor<NumberSequenceT>(opts, runtimeOpts, results, out, checkpoint, resumeState);
+            device_trial_factor(ctx, pureSeq);
 #else
-            host_trial_factor<NumberSequenceT>(opts, runtimeOpts, results, out, checkpoint, resumeState);
+            host_trial_factor(ctx, pureSeq);
 #endif
         }
         (output_ptr ? *output_ptr.get() : out) << results;

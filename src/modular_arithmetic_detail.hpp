@@ -56,7 +56,10 @@ namespace cutrialdive {
 
     /// Returns the high 128 bits of the 256 bits product of two 128 bit integers,
     /// in english: returns (a * b) / 2^128.
-    CUTRIALDIVE_DEVICE __uint128_t mul128hi(__uint128_t a, __uint128_t b);
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST __uint128_t mul128hi(__uint128_t a, __uint128_t b);
 
     template <size_t Base, typename ValueT>
     CUTRIALDIVE_DEVICE_AND_HOST size_t digits_in_base(ValueT n);
@@ -67,12 +70,26 @@ namespace cutrialdive {
 #endif
     CUTRIALDIVE_DEVICE_AND_HOST size_t bit_length(ValueT n);
 
+    /// Returns a mod d
+    /// @pre d is odd, mu64 is the 64-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t mod(uint64_t a, uint64_t d, uint64_t mu64);
+
     /// Returns a * b mod d
     /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
 #if !CUTRIALDIVE_IS_CUDA
     constexpr
 #endif
     CUTRIALDIVE_DEVICE_AND_HOST uint64_t mulmod(uint64_t a, uint64_t b, uint64_t d, uint64_t mu64, __uint128_t mu128);
+
+    /// Returns a ^ b mod d
+    /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t modpow(uint64_t a, uint64_t b, uint64_t d, uint64_t mu64, __uint128_t mu128);
 }
 
 
@@ -238,8 +255,12 @@ namespace cutrialdive {
         return (~__uint128_t{0}) / p;
     }
 
-    CUTRIALDIVE_DEVICE
-    inline __uint128_t mul128hi(__uint128_t a, __uint128_t b)
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST __uint128_t mul128hi(__uint128_t a, __uint128_t b)
     {
         // Let a and b's base 2^64 representation be
         //   a = a0 + 2^64*a1
@@ -301,6 +322,19 @@ namespace cutrialdive {
         }
     }
 
+    /// Returns a mod d
+    /// @pre d is odd, mu64 is the 64-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t mod(uint64_t a, uint64_t d, uint64_t mu64)
+    {
+        auto q = (__uint128_t{a} * mu64) >> 64;
+        auto r = a - q * d;
+        return (r >= d) ? r - d : r;
+    }
 
     /// Returns a * b mod d
     /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
@@ -314,7 +348,28 @@ namespace cutrialdive {
         auto ab = __uint128_t(a) * b;
         auto q = (ab >> 64) ? mul128hi(ab, mu128) : ((ab * mu64) >> 64);
         __uint128_t r = ab - q * d;
-        return r >= d ? r - d : r;
+        return (r >= d) ? r - d : r;
     }
+
+    /// Returns a ^ b mod d
+    /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t modpow(uint64_t a, uint64_t b, uint64_t d, uint64_t mu64, __uint128_t mu128)
+    {
+        uint64_t r = 1;
+        uint64_t m = (a < d) ? a : mod(a, d, mu64);
+        for(; b; b >>= 1) {
+            if(b & 1) {
+                r = mulmod(r, m, d, mu64, mu128);
+            }
+            m = mulmod(m, m, d, mu64, mu128);
+        }
+        return r;
+    }
+
 }
 

@@ -15,7 +15,12 @@ namespace cutrialdive::tests {
     factoring_results<uint64_t, uint32_t> tf_peano(trial_factoring_options const & tfOptions, std::ostream & out)
     {
         factoring_results<uint64_t, uint32_t> results{tfOptions.n0, tfOptions.n1 - tfOptions.n0};
-        trial_factor<PeanoT>(tfOptions,tf_runtime_options::default_options(), results, out);
+        trial_factor<PeanoT>(trial_factoring_context{
+            tfOptions,
+            tf_runtime_options::default_options(),
+            results,
+            out
+        });
         return results;
     }
 
