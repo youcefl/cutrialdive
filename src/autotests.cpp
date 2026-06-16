@@ -134,8 +134,13 @@ namespace cutrialdive {
     int autotest()
     {
             auto sieve = [](auto n0, auto n1) -> auto {
+                std::vector<std::span<uint64_t>> primesVec;
+                siever primeGen{4u};
+                primeGen.sieve(n0, n1, primesVec);
                 std::vector<uint64_t> primes;
-                cutrialdive::sieve(n0, n1, primes);
+                std::for_each(std::begin(primesVec), std::end(primesVec), [&](auto v) {
+                    primes.insert(std::end(primes), std::begin(v), std::end(v));
+                });
                 return primes;
             };
             std::cout << "Executing self tests..." << std::endl;

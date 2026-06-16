@@ -4,6 +4,7 @@
 */
 #pragma once
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <optional>
@@ -24,6 +25,8 @@ namespace cutrialdive {
         bool is_resuming;
         std::optional<std::filesystem::path> checkpoint_path;
         std::optional<std::uint32_t> checkpoint_period;
+
+        std::optional<uint32_t> threads_count;
 
         num_seq_id seq_id;
         std::string seq_params;

@@ -38,6 +38,7 @@ namespace cutrialdive {
     /// Execution options
     struct tf_runtime_options
     {
+        uint32_t threads_count;
         std::chrono::seconds checkpoint_period;
         std::chrono::milliseconds progress_period;
 

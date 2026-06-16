@@ -255,8 +255,6 @@ namespace cutrialdive {
         double sieveTime{}, computeDataTime{}, copyPrimeDataToHostTime{};
     
         constexpr auto precomputeReciprocals = PrecomputeReciprocals::no;
-        std::vector<uint64_t> primes;
-        primes.reserve(1ull << 22);
         prime_data<uint64_t, precomputeReciprocals> primeData;
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
@@ -287,9 +285,19 @@ namespace cutrialdive {
             trial_div_by_2<NumberSequenceT, uint64_t, precomputeReciprocals><<<1, 1>>>(tf_data.device_view());
         }
 
-        constexpr auto segmentLen = uint64_t{1} << 25;
+        constexpr auto segmentLen = uint64_t{1} << 26;
         auto const f1 = opts.f1;
-        auto lastPrimeOfPreviousSeg = decltype(primes)::value_type{};
+        auto lastPrimeOfPreviousSeg = uint64_t{};
+        siever primeGen{ctx.runtime_options.threads_count};
+
+        out << "Sieving for primes using ";
+        if(primeGen.threads_count() == 1) {
+            out << "one thread." << std::endl;
+        } else {
+            out << "up to " << primeGen.threads_count() << " threads." << std::endl;
+        }
+        std::vector<std::span<uint64_t>> primes;
+        primes.reserve(primeGen.threads_count());
 
         // Main loop for odd primes only
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
@@ -297,8 +305,7 @@ namespace cutrialdive {
             fx = fy, fy = (std::min)(fy + segmentLen, f1)
         ) {
             auto sieveStart = std::chrono::high_resolution_clock::now();
-            primes.clear();
-            sieve(fx, fy, primes);
+            primeGen.sieve(fx, fy, primes);
             sieveTime += delta_now(sieveStart);
 
             if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
@@ -336,7 +343,7 @@ namespace cutrialdive {
                 out << "Error executing trial division kernel" << std::endl;
                 out << "Launch error: " << cudaGetErrorString(err) << std::endl;
             }
-            lastPrimeOfPreviousSeg = !primes.empty() ? primes.back() : 0;
+            lastPrimeOfPreviousSeg = !primes.empty() ? primes.back().back() : 0;
         }
         device_synchronize(out);
         if(progressHandler) {

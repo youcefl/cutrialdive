@@ -51,6 +51,9 @@ namespace {
         if(cmdOpts.checkpoint_period) {
             runtimeOpts.checkpoint_period = std::chrono::seconds{*cmdOpts.checkpoint_period};
         }
+        if(cmdOpts.threads_count) {
+            runtimeOpts.threads_count = *cmdOpts.threads_count;
+        }
         return runtimeOpts;
     }
 }

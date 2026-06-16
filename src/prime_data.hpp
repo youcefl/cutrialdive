@@ -6,6 +6,9 @@
 
 #include <cstdint>
 #include <vector>
+#include <span>
+#include <numeric>
+
 
 namespace cutrialdive {
 
@@ -79,7 +82,7 @@ namespace cutrialdive {
     }
 
     template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
-    inline void compute_prime_data(std::vector<PrimeT> const & primes, prime_data<PrimeT, precomputeReciprocals> & data)
+    inline void compute_prime_data(std::vector<std::span<PrimeT>> const & primes, prime_data<PrimeT, precomputeReciprocals> & data)
     {
         if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
             compute_reciprocals(primes, data.reciprocals());
@@ -120,7 +123,7 @@ namespace cutrialdive {
         uint64_t size() const;
         void resize(uint64_t newSize);
         void copy_from_host(
-                std::vector<PrimeT> const & primes,
+                std::vector<std::span<PrimeT>> const & primes,
                 prime_data<PrimeT, precomputeReciprocals> const & data
             );
     private:
@@ -159,22 +162,29 @@ namespace cutrialdive {
 
     template <typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
     inline void device_prime_data<PrimeT, precomputeReciprocals>::copy_from_host(
-        std::vector<PrimeT> const & primes,
+        std::vector<std::span<PrimeT>> const & primes,
         prime_data<PrimeT, precomputeReciprocals> const & data
         )
     {
+        uint64_t const primesCount = std::accumulate(std::begin(primes), std::end(primes),
+            uint64_t{}, [](uint64_t x, auto const & y) {
+                return x + y.size();
+            });        
         if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
             // Must have same number of primes and additional data
             // (because there must be a one to one correspondance between
             // i-th prime and associated data)
-            assert(primes.size() == data.size());
+            assert(primesCount == data.size());
         }
-        auto const primes_size = primes.size();
-        resize(primes_size);
+        resize(primesCount);
         if(!size()) {
             return;
         }
-        cudaMemcpy(data_.primes, &primes[0], sizeof(*&primes[0]) * primes_size, cudaMemcpyHostToDevice);
+        auto j = 0;
+        for(auto chunk : primes) {
+            cudaMemcpy(&data_.primes[j], &chunk[0], sizeof(*&chunk[0]) * chunk.size(), cudaMemcpyHostToDevice);
+            j += chunk.size();
+        }
         if constexpr (precomputeReciprocals == PrecomputeReciprocals::yes) {
             cudaMemcpy(data_.reciprocals, &data.reciprocals()[0],
                     sizeof(*&data.reciprocals()[0]) * data.reciprocals().size(),

@@ -16,17 +16,16 @@ namespace {
 
     template <typename T, typename ExceptionBuilder>
     inline
-    T expect_value(ExceptionBuilder buildException, char const* optName, char**& parg)
+    T expect_value(ExceptionBuilder buildException, char const* optName, char** parg)
     {
         if(!*parg) {
             throw buildException(std::string{"Missing value for option "} + optName);
         }
         if constexpr (std::is_same_v<std::string, T>) {
-            return std::string{*parg++};
+            return std::string{*parg};
         }
         T val;
         std::istringstream{*parg} >> val;
-        ++parg;
         return val;
     }
 
@@ -44,6 +43,15 @@ namespace {
             return true;
         }
         return false;
+    }
+
+    template <typename ExceptionBuilder>
+    inline
+    bool parse_threads(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    {
+        return eat_valued_option<uint32_t>("--threads", argv, buildException, [&](auto threadsCount){
+                options.threads_count = threadsCount;
+            });
     }
 
     template <typename ExceptionBuilder>
@@ -66,6 +74,7 @@ namespace {
             } catch (std::exception const & ex) {
                 throw buildException(ex.what());
             }
+            ++argv;
         })) {
            throw buildException("Invalid command line, option --num-seq must come first");
         }
@@ -78,14 +87,21 @@ namespace {
         options.is_resuming = false;
         bool haveChkpntPeriod = false;
         for(; *argv; ++argv) {
-            eat_valued_option<std::string>("--resume", argv, buildException, [&](auto chkpntPath){
+            if(eat_valued_option<std::string>("--resume", argv, buildException, [&](auto chkpntPath){
                 options.is_resuming = true;
                 options.checkpoint_path = chkpntPath;
-            });
-            eat_valued_option<uint32_t>("--checkpoint-period", argv, buildException, [&](auto chkpntPeriod){
+            })) {
+                continue;
+            }
+            if(eat_valued_option<uint32_t>("--checkpoint-period", argv, buildException, [&](auto chkpntPeriod){
                 options.checkpoint_period = chkpntPeriod;
                 haveChkpntPeriod = true;
-            });
+            })) {
+                continue;
+            }
+            if(parse_threads(options, argv, buildException)) {
+                continue;
+            }
             if(!options.is_resuming && !haveChkpntPeriod) {
                 return;
             }
@@ -170,11 +186,20 @@ namespace cutrialdive {
                 return;
             }
 #endif // CUTRIALDIVE_ENABLE_PRP
-            haveStart = haveStart || eat_valued_option<uint64_t>("-s", ppargv, buildException,
-                                        [&tfOptions](auto n0){ tfOptions.n0 = n0; });
-            haveEnd =  haveEnd || eat_valued_option<uint64_t>("-e", ppargv, buildException,
-                                        [&tfOptions](auto n1){ tfOptions.n1 = n1; });
-            haveTfBits = haveTfBits || eat_valued_option<uint16_t>("--tf-bits", ppargv, buildException,
+            if(parse_threads(*options_, ppargv, buildException)) {
+                continue;
+            }
+            if(eat_valued_option<uint64_t>("-s", ppargv, buildException,
+                                        [&tfOptions](auto n0){ tfOptions.n0 = n0; })) {
+                haveStart = true;
+                continue;
+            }
+            if(eat_valued_option<uint64_t>("-e", ppargv, buildException,
+                                        [&tfOptions](auto n1){ tfOptions.n1 = n1; })) {
+                haveEnd = true;
+                continue;
+            }
+            if(eat_valued_option<uint16_t>("--tf-bits", ppargv, buildException,
                 [&](auto tfBits){
                     tfOptions.f0 = 2;
                     if(tfBits > 64) {
@@ -182,11 +207,20 @@ namespace cutrialdive {
                             "The value of option --tf-bits must be an integer between 0 and 64"};
                     }
                     tfOptions.f1 = (tfBits < 64) ? (uint64_t{1} << tfBits) : ~uint64_t{};
-                });
-            haveTfStart = haveTfStart || eat_valued_option<uint64_t>("--tf-start", ppargv, buildException,
-                                        [&tfOptions](auto start){ tfOptions.f0 = start; });
-            haveTfEnd = haveTfEnd || eat_valued_option<uint64_t>("--tf-end", ppargv, buildException,
-                                        [&tfOptions](auto end){ tfOptions.f1 = end; });
+                })){
+                    haveTfBits = true;
+                    continue;
+            }
+            if(eat_valued_option<uint64_t>("--tf-start", ppargv, buildException,
+                                        [&tfOptions](auto start){ tfOptions.f0 = start; })) {
+                haveTfStart = true;
+                continue;
+            }
+            if(eat_valued_option<uint64_t>("--tf-end", ppargv, buildException,
+                                        [&tfOptions](auto end){ tfOptions.f1 = end; })) {
+                haveTfEnd = true;
+                continue;
+            }
             if(haveTfBits && (haveTfStart || haveTfEnd)) {
                 throw command_line_parse_exception{
                             "Mixing --tf-bits with --tf-start and --tf-end is not allowed"};
@@ -195,11 +229,15 @@ namespace cutrialdive {
                 tfOptions.is_progress_enabled = false;
                 continue;
             }
-            eat_valued_option<std::string>("--output", ppargv, buildException,
-                        [&tfOptions](auto path){ tfOptions.output_path = path; });
-            eat_valued_option<uint32_t>("--checkpoint-period", ppargv, buildException, [&](auto chkpntPeriod){
+            if(eat_valued_option<std::string>("--output", ppargv, buildException,
+                        [&tfOptions](auto path){ tfOptions.output_path = path; })) {
+                continue;
+            }
+            if(eat_valued_option<uint32_t>("--checkpoint-period", ppargv, buildException, [&](auto chkpntPeriod){
                 options_->checkpoint_period = chkpntPeriod;
-            });
+            })) {
+                continue;
+            }
         }
         auto mandatoryFlags = std::array{haveStart, haveTfStart || haveTfBits, haveTfEnd || haveTfBits};
         if(std::any_of(std::begin(mandatoryFlags), std::end(mandatoryFlags), [](auto val){ return !val; })) {

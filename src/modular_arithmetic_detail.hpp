@@ -4,10 +4,11 @@
 */
 #pragma once
 
-#include <vector>
 #include <cstdint>
-#include <iostream>
 #include <cstddef>
+#include <vector>
+#include <span>
+#include <iostream>
 #include <bit>
 
 #include "common_defines.h"
@@ -24,9 +25,9 @@ namespace cutrialdive {
     CUTRIALDIVE_DEVICE_AND_HOST NumT reciprocal(NumT d);
 
     /// @brief Computes the reciprocal of each prime in @param primes and puts the result in @param reciprocals
-    /// @param[in] primes vector of prime numbers
+    /// @param[in] primes prime numbers
     /// @param[out] reciprocals vector such that reciprocals[i] == reciprocal(primes[i]) for each i < primes.size()
-    void compute_reciprocals(std::vector<uint64_t> const & primes, std::vector<uint64_t> & reciprocals);
+    void compute_reciprocals(std::vector<std::span<uint64_t>> const & primes, std::vector<uint64_t> & reciprocals);
 
     template <typename NumT>
     struct initial_residue {
