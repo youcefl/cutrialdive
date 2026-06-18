@@ -21,11 +21,10 @@ namespace fs = std::filesystem;
 TEST_CASE("Basic checkpoint test")
 {
     constexpr auto maxFactorsPerNumber = 32;
-    constexpr auto isProgressEnabled = false;
 
     num_seq_spec numSeqSpec{num_seq_id::mersenne};
     trial_factoring_options tfOpts{101, 105, 0, 1u << 16, {},
-            maxFactorsPerNumber, isProgressEnabled};
+            maxFactorsPerNumber};
 
     auto checkpointPath = tests::get_temp_file_path() += ".chkpnt";
 
@@ -66,7 +65,7 @@ TEST_CASE("Basic checkpoint test")
     REQUIRE(factoringResults.size() == 4);
     REQUIRE(factoringResults[0].size() == 0);
 
-    checkpoint.end();
+    checkpoint.remove_checkpoint();
 
     REQUIRE(!fs::exists(checkpointPath));
 }

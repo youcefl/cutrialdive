@@ -64,7 +64,13 @@ namespace cutrialdive {
     class checkpoint_manager
     {
     public:
+        checkpoint_manager(checkpoint_manager const &) = delete;
+        checkpoint_manager& operator=(checkpoint_manager const &) = delete;
+        checkpoint_manager(checkpoint_manager&&) noexcept = default;
+        checkpoint_manager& operator=(checkpoint_manager&&) noexcept = default;
+
         /// Constructs an instance with a path, a checkpointing period and a job specification
+        /// The checkpointing period is the minimum amount of time during two checkpoint file savings.
         /// @param[in] checkpointPath path of the checkpoint file
         /// @param[in] checkpointingPeriod checkpointing period in seconds
         /// @param[in] jobSpec job specification
@@ -77,6 +83,7 @@ namespace cutrialdive {
         /// Returns the path of the checkpoint file
         std::filesystem::path checkpoint_path() const;
 
+        /// Returns the period in seconds
         std::chrono::seconds period() const;
 
         /// Returns true if (and only if) a checkpoint file has to be written
@@ -88,7 +95,9 @@ namespace cutrialdive {
         /// Loads a checkpoint from @param checkpointPath
         static std::optional<checkpoint_data> load(std::filesystem::path const & checkpointPath);
 
-        void end();
+        /// Removes the checkpoint file
+        /// To be called when factoring is done and final results are written to the output file
+        void remove_checkpoint();
     
     private:
         job_spec job_spec_;

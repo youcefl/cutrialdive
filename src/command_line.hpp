@@ -25,7 +25,7 @@ namespace cutrialdive {
         bool is_resuming;
         std::optional<std::filesystem::path> checkpoint_path;
         std::optional<std::uint32_t> checkpoint_period;
-
+        std::optional<bool> is_progress_enabled;
         std::optional<uint32_t> threads_count;
 
         num_seq_id seq_id;

@@ -19,9 +19,8 @@ namespace cutrialdive::tests {
         constexpr uint64_t n0 = 2956708207;
         constexpr uint64_t n1 = 2956708707;
         constexpr auto maxFactorsPerNumber = 1024;
-        constexpr auto isProgressEnabled = false;
         trial_factoring_options tfOpts{n0, n1, 0, 1u << 24, {},
-                maxFactorsPerNumber, isProgressEnabled};
+                maxFactorsPerNumber};
         std::ostringstream ostr;
         auto results = tfPeano(tfOpts, ostr);
 
@@ -69,9 +68,8 @@ TEST_CASE("TF Peano with val, valmod_2, valmod_mu128, next_val_mod_mu128")
 TEST_CASE("TF Mersenne")
 {
     constexpr auto maxFactorsPerNumber = 1024;
-    constexpr auto isProgressEnabled = true;
     trial_factoring_options tfOpts{1, 101, 0, 1u << 16, {},
-            maxFactorsPerNumber, isProgressEnabled};
+            maxFactorsPerNumber};
     std::ostringstream ostr;
 
     auto results = trial_factor(num_seq_spec{num_seq_id::mersenne}, tfOpts, tf_runtime_options::default_options(), ostr);
@@ -88,13 +86,14 @@ TEST_CASE("TF Mersenne")
 TEST_CASE("TF Proth, k = 1279")
 {
     constexpr auto maxFactorsPerNumber = 128;
-    constexpr auto isProgressEnabled = false;
     trial_factoring_options tfOpts{0, 80, 0, 1u << 16, {},
-            maxFactorsPerNumber, isProgressEnabled};
+            maxFactorsPerNumber};
+    auto rtOptions = tf_runtime_options::default_options();
+    rtOptions.is_progress_enabled = false;
     std::ostringstream ostr;
 
     auto results = trial_factor(num_seq_spec{num_seq_id::proth, "1279"},tfOpts, 
-                                tf_runtime_options::default_options(), ostr
+                                rtOptions, ostr
                                );
 
     REQUIRE(results.n0() == 0);

@@ -45,6 +45,16 @@ namespace {
         return false;
     }
 
+    inline
+    bool parse_no_progress(command_line_options & options, char**& argv)
+    {
+        if(!strcmp(*argv, "--no-progress")) {
+            options.is_progress_enabled = false;
+            return true;
+        }
+        return false;
+    }
+
     template <typename ExceptionBuilder>
     inline
     bool parse_threads(command_line_options & options, char**& argv, ExceptionBuilder buildException)
@@ -100,6 +110,9 @@ namespace {
                 continue;
             }
             if(parse_threads(options, argv, buildException)) {
+                continue;
+            }
+            if(parse_no_progress(options, argv)) {
                 continue;
             }
             if(!options.is_resuming && !haveChkpntPeriod) {
@@ -225,8 +238,7 @@ namespace cutrialdive {
                 throw command_line_parse_exception{
                             "Mixing --tf-bits with --tf-start and --tf-end is not allowed"};
             }
-            if(*ppargv && !strcmp(*ppargv, "--no-progress")) {
-                tfOptions.is_progress_enabled = false;
+            if(parse_no_progress(*options_, ppargv)) {
                 continue;
             }
             if(eat_valued_option<std::string>("--output", ppargv, buildException,

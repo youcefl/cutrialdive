@@ -274,7 +274,7 @@ namespace details {
                 ? std::move(resumeState->factors_buffer.get())
                 : factors_buffer<uint64_t>{n0, n1 - n0, opts.max_factors_per_number};
 
-        auto progressHandler = opts.is_progress_enabled 
+        auto progressHandler = ctx.runtime_options.is_progress_enabled 
                 ? std::make_unique<progress>(f1, ctx.runtime_options.progress_period, out)
                 : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler ? std::function<void(uint64_t, uint64_t)>{
@@ -325,9 +325,6 @@ namespace details {
         }
         if(progressHandler) {
             progressHandler->end();
-        }
-        if(checkpoint) {
-            checkpoint->end();
         }
         ctx.results = factorsBuf.to_factoring_results<uint64_t, uint32_t>();
     }
@@ -394,6 +391,11 @@ namespace details {
             host_trial_factor(ctx, pureSeq);
 #endif
         }
+        // Once the final results are written to the output file...
         (output_ptr ? *output_ptr.get() : out) << results;
+        // We can remove the checkpoint file.
+        if(checkpoint) {
+            checkpoint->remove_checkpoint();
+        }
     }
 }

@@ -8,9 +8,13 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cassert>
 
 namespace {
     using namespace cutrialdive;
+
+
+    constexpr uint32_t CHECKPOINT_FILE_VERSION = 1;
 
     template <typename Enum>
     constexpr uint32_t enum_to_u32(Enum e)
@@ -60,7 +64,6 @@ namespace {
         write_pod(out, tfOptions.f1);
         write_str(out, tfOptions.output_path ? tfOptions.output_path->string() : std::string{});
         write_pod(out, tfOptions.max_factors_per_number);
-        write_pod(out, tfOptions.is_progress_enabled);
     }
 
     trial_factoring_options deserialize_tf_options(std::istream & in)
@@ -74,7 +77,6 @@ namespace {
         tfOpts.output_path = outputPath.empty() ? std::optional<std::filesystem::path>{}
                                                 : std::optional<std::filesystem::path>{outputPath};
         tfOpts.max_factors_per_number = read_pod<decltype(tfOpts.max_factors_per_number)>(in);
-        tfOpts.is_progress_enabled = read_pod<decltype(tfOpts.is_progress_enabled)>(in);
 
         return tfOpts;
     }
@@ -86,17 +88,24 @@ namespace cutrialdive {
     void serialize_factors_buffer(std::ostream & out, factors_buffer<PrimeT> const & factorsBuf)
     {
         write_pod(out, factorsBuf.numbers_count_);
-        std::for_each(std::begin(factorsBuf.factors_count_), std::end(factorsBuf.factors_count_),
-            [&](auto const & factorsCount) {
-                write_pod(out, factorsCount);
-        });
-        write_pod(out, factorsBuf.factors_.size());
-        std::for_each(std::begin(factorsBuf.factors_), std::end(factorsBuf.factors_),
-            [&](auto const & prime) {
-                write_pod(out, prime);
-        });
         write_pod(out, factorsBuf.max_factors_per_number_);
         write_pod(out, factorsBuf.n0_);
+
+        assert(factorsBuf.numbers_count_ == factorsBuf.factors_count_.size());
+
+        for(size_t i = 0, iEnd = factorsBuf.factors_count_.size(); i < iEnd; ++i) {
+            auto factorsCount = factorsBuf.factors_count_[i];
+            write_pod(out, factorsCount);
+            // jEnd is initialized that way because factorsCount is the actual number
+            // of factors found which can be greater than max_factors_per_number_
+            // (We still count the factors even if we ran out of space to store them)
+            for(size_t j = i * factorsBuf.max_factors_per_number_,
+                jEnd = j + (std::min)(factorsCount, factorsBuf.max_factors_per_number_);
+                j < jEnd;
+                ++j) {
+                write_pod(out, factorsBuf.factors_[j]);
+            }
+        }
     }
 
     template <typename PrimeT>
@@ -104,17 +113,24 @@ namespace cutrialdive {
     {
         factors_buffer<PrimeT> factorsBuf{0, 0, 0};
         factorsBuf.numbers_count_ = read_pod<decltype(factorsBuf.numbers_count_)>(in);
-        factorsBuf.factors_count_.reserve(factorsBuf.numbers_count_);
-        for(size_t i = 0; i < factorsBuf.numbers_count_; ++i) {
-                factorsBuf.factors_count_.push_back(read_pod<uint32_t>(in));
-        }
-        auto factorsSize = read_pod<decltype(factorsBuf.factors_.size())>(in);
-        factorsBuf.factors_.reserve(factorsSize);
-        for(size_t i = 0; i < factorsSize; ++i) {
-            factorsBuf.factors_.push_back(read_pod<PrimeT>(in));
-        }
         factorsBuf.max_factors_per_number_ = read_pod<decltype(factorsBuf.max_factors_per_number_)>(in);
         factorsBuf.n0_ = read_pod<decltype(factorsBuf.n0_)>(in);
+
+        factorsBuf.factors_count_.reserve(factorsBuf.numbers_count_);
+        factorsBuf.factors_.resize(factorsBuf.max_factors_per_number_ * factorsBuf.numbers_count_);
+
+        for(size_t i = 0, iEnd = factorsBuf.numbers_count_; i < iEnd; ++i) {
+            auto factorsCount = read_pod<typename decltype(factorsBuf.factors_count_)::value_type>(in);
+            factorsBuf.factors_count_.push_back(factorsCount);
+            // jEnd is initialized that way because factorsCount... etc. (see comment in serialize function above).
+            for(size_t j = i * factorsBuf.max_factors_per_number_,
+                    jEnd = j + (std::min)(factorsCount, factorsBuf.max_factors_per_number_);
+                j < jEnd;
+                ++j) {
+                auto factor = read_pod<typename decltype(factorsBuf.factors_)::value_type>(in);
+                factorsBuf.factors_[j] = factor;
+            }
+        }
 
         return std::move(factorsBuf);
     }
@@ -157,8 +173,7 @@ namespace cutrialdive {
         if(!out) {
             throw std::runtime_error{"Could not create temporary file `" + tmpChkpntPath.string() + "'"};
         }
-        static const std::string version{CUTRIALDIVE_VERSION};
-        write_str(out, version);
+        write_pod(out, CHECKPOINT_FILE_VERSION);
         write_pod(out, enum_to_u32(job_spec_.seq_spec.seq_id));
         write_str(out, job_spec_.seq_spec.seq_params);
         serialize(out, job_spec_.tf_options);
@@ -175,9 +190,9 @@ namespace cutrialdive {
         if(!in) {
             return {};
         }
-        auto version = read_str(in);
-        if(version != CUTRIALDIVE_VERSION) {
-            throw std::runtime_error{"Unexpected version `" + version + "' found in checkpoint file"};
+        auto version = read_pod<uint32_t>(in);
+        if(version != CHECKPOINT_FILE_VERSION) {
+            throw std::runtime_error{"Unexpected version number `" + std::to_string(version) + "' found in checkpoint file"};
         }
         auto numSeqSpec = num_seq_spec {
             static_cast<num_seq_id>(read_pod<uint32_t>(in)),
@@ -193,7 +208,7 @@ namespace cutrialdive {
         };
     }
 
-    void checkpoint_manager::end()
+    void checkpoint_manager::remove_checkpoint()
     {
         std::filesystem::remove(checkpoint_path_);
     }

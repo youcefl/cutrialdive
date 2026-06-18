@@ -51,8 +51,11 @@ namespace {
         if(cmdOpts.checkpoint_period) {
             runtimeOpts.checkpoint_period = std::chrono::seconds{*cmdOpts.checkpoint_period};
         }
-        if(cmdOpts.threads_count) {
+        if(cmdOpts.threads_count.has_value()) {
             runtimeOpts.threads_count = *cmdOpts.threads_count;
+        }
+        if(cmdOpts.is_progress_enabled.has_value()) {
+            runtimeOpts.is_progress_enabled = *cmdOpts.is_progress_enabled;
         }
         return runtimeOpts;
     }
@@ -82,6 +85,7 @@ int main(int argc, char** argv)
         auto options = *parser.get_options();
         if(options.is_resuming) {
             ctd::resume_trial_factoring(options.checkpoint_path.value(), get_runtime_options(options), std::cout);
+            return 0;
         }
         auto numSeqSpec = num_seq_spec{options.seq_id, options.seq_params};
         if(options.wants_value) {

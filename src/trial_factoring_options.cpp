@@ -14,7 +14,8 @@ namespace cutrialdive {
             << ", f0 = " << options.f0
             << ", f1 = " << options.f1
             << ", output: `" << (options.output_path ? options.output_path->string()
-            : noPath) << "'";
+                                                     : noPath)
+            << "'";
         return out;
     }
 
@@ -23,7 +24,8 @@ namespace cutrialdive {
         return tf_runtime_options{
             .threads_count = 1u,
             .checkpoint_period = std::chrono::seconds{360},
-            .progress_period = std::chrono::milliseconds{1000}
+            .progress_period = std::chrono::milliseconds{1000},
+            .is_progress_enabled = true
         };
     }
 

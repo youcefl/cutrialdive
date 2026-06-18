@@ -27,8 +27,6 @@ namespace cutrialdive {
         std::optional<std::filesystem::path> output_path;
         /// @brief Maximum number of factors per number (default = 128)
         uint32_t max_factors_per_number{128};
-        /// @brief Whether to display progress
-        bool is_progress_enabled{true};
 
         bool operator==(trial_factoring_options const&) const = default;        
     };
@@ -41,6 +39,8 @@ namespace cutrialdive {
         uint32_t threads_count;
         std::chrono::seconds checkpoint_period;
         std::chrono::milliseconds progress_period;
+        /// @brief Whether to display progress
+        bool is_progress_enabled;
 
         static tf_runtime_options default_options();
     };

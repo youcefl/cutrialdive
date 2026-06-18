@@ -270,8 +270,9 @@ namespace cutrialdive {
         device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{
             numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
-        auto progressHandler = opts.is_progress_enabled ? std::make_unique<progress>(opts.f1, ctx.runtime_options.progress_period, out) 
-                                                        : std::unique_ptr<progress>{};
+        auto progressHandler = ctx.runtime_options.is_progress_enabled
+                ? std::make_unique<progress>(opts.f1, ctx.runtime_options.progress_period, out) 
+                : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
             ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
                 progressHandler->update(segUpperBound, lastPrimeInSeg); 
@@ -349,12 +350,8 @@ namespace cutrialdive {
         if(progressHandler) {
             progressHandler->end();
         }
-        if(checkpoint) {
-            checkpoint->end();
-        }
 
         auto tfEnd = std::chrono::high_resolution_clock::now();
-        
 
         if constexpr(precomputeReciprocals == PrecomputeReciprocals::yes) {
             out << "Computing prime data on host took " << computeDataTime << "s (cumulated time)" << std::endl;
