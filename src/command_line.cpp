@@ -54,6 +54,26 @@ namespace {
         }
         return false;
     }
+    template <typename ValueT, typename DestT, typename ExceptionBuilder>
+    inline
+    bool parse_valued_option(char const * optName, DestT & dest, char**& argv, ExceptionBuilder buildException)
+    {
+        return eat_valued_option<ValueT>(optName, argv, buildException, [&](auto value){
+            dest = value;
+        });
+    }
+
+    template <typename ExceptionBuilder>
+    inline
+    bool parse_verbosity(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    {
+        return eat_valued_option<uint16_t>("--verbosity", argv, buildException, [&](auto verbosityLevel){
+                if(!is_valid_verbosity(verbosityLevel)) {
+                    throw buildException("Invalid value for option --verbosity");
+                }
+                options.verbosity_level = static_cast<verbosity>(verbosityLevel);
+            });
+    }
 
     template <typename ExceptionBuilder>
     inline
@@ -62,6 +82,35 @@ namespace {
         return eat_valued_option<uint32_t>("--threads", argv, buildException, [&](auto threadsCount){
                 options.threads_count = threadsCount;
             });
+    }
+
+    template <typename ExceptionBuilder>
+    inline
+    bool parse_segment_length(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    {
+        if(eat_valued_option<uint64_t>("--segment-length", argv, buildException, [&](auto segmentLength){
+            if(options.segment_length.has_value()) {
+                throw buildException(
+                        "Invalid command line, --segment-length is not allowed when --segment-bits is present");
+            }
+            options.segment_length = segmentLength;
+        })) {
+            return true;
+        }
+        if(eat_valued_option<int32_t>("--segment-bits", argv, buildException, [&](auto segmentBits){
+            if(options.segment_length.has_value()) {
+                throw buildException(
+                        "Invalid command line, --segment-bits is not allowed when --segment-length is present");
+            }
+            if(segmentBits < 0 || segmentBits >= 64) {
+                throw buildException(
+                        "value of option --segment-bits must be an integer in range [0, 63]");
+            }
+            options.segment_length = uint64_t{1} << segmentBits;
+        })) {
+            return true;
+        }
+        return false;
     }
 
     template <typename ExceptionBuilder>
@@ -90,6 +139,24 @@ namespace {
         }
     }
 
+#ifdef CUTRIALDIVE_ENABLE_GPU
+    template <typename ExceptionBuilder>
+    inline
+    bool parse_device_options(command_line_options & options, char**& argv, ExceptionBuilder buildException)
+    {
+        if(parse_valued_option<int32_t>("-g", options.device_id, argv, buildException)) {
+            return true;
+        }
+        if(parse_valued_option<int32_t>("--grid-size", options.grid_size, argv, buildException)) {
+            return true;
+        }
+        if(parse_valued_option<int32_t>("--block-size", options.block_size, argv, buildException)) {
+            return true;
+        }
+        return false;
+    }
+#endif
+
     template <typename ExceptionBuilder>
     inline
     void parse_resume(command_line_options & options, char**& argv, ExceptionBuilder buildException)
@@ -103,16 +170,27 @@ namespace {
             })) {
                 continue;
             }
+#ifdef CUTRIALDIVE_ENABLE_GPU
+            if(parse_device_options(options, argv, buildException)) {
+                continue;
+            }
+#endif
             if(eat_valued_option<uint32_t>("--checkpoint-period", argv, buildException, [&](auto chkpntPeriod){
                 options.checkpoint_period = chkpntPeriod;
                 haveChkpntPeriod = true;
             })) {
                 continue;
             }
-            if(parse_threads(options, argv, buildException)) {
+            if(parse_verbosity(options, argv, buildException)) {
+                continue;
+            }
+            if(parse_valued_option<uint32_t>("--threads", options.threads_count, argv, buildException)) {
                 continue;
             }
             if(parse_no_progress(options, argv)) {
+                continue;
+            }
+            if(parse_segment_length(options, argv, buildException)) {
                 continue;
             }
             if(!options.is_resuming && !haveChkpntPeriod) {
@@ -142,6 +220,10 @@ namespace cutrialdive {
         , wants_version_{}
         , wants_autotests_{}
     {
+        if(argc == 1) {
+            wants_usage_ = true;
+            return;
+        }
         if(argc == 2) {
             if(!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")) {
                 wants_help_ = true;
@@ -166,12 +248,18 @@ namespace cutrialdive {
             return;
         }
 
+        if(parse_verbosity(*options_, ppargv, buildException)) {
+            ++ppargv;
+        }
         parse_num_seq(*options_, ppargv, buildException);
 
         trial_factoring_options tfOptions{};
         bool haveStart{}, haveEnd{}, haveTfBits{}, haveTfStart{}, haveTfEnd{};
 
         for(; *ppargv; ++ppargv) {
+            if(parse_verbosity(*options_, ppargv, buildException)) {
+                continue;
+            }
             if(eat_valued_option<uint64_t>("--print", ppargv, buildException, [this](auto n) {
                 options_->wants_value = true;
                 options_->n = n;
@@ -199,16 +287,19 @@ namespace cutrialdive {
                 return;
             }
 #endif // CUTRIALDIVE_ENABLE_PRP
-            if(parse_threads(*options_, ppargv, buildException)) {
+#ifdef CUTRIALDIVE_ENABLE_GPU
+            if(parse_device_options(*options_, ppargv, buildException)) {
                 continue;
             }
-            if(eat_valued_option<uint64_t>("-s", ppargv, buildException,
-                                        [&tfOptions](auto n0){ tfOptions.n0 = n0; })) {
+#endif
+            if(parse_valued_option<uint32_t>("--threads", options_->threads_count, ppargv, buildException)) {
+                continue;
+            }
+            if(parse_valued_option<uint64_t>("-s", tfOptions.n0, ppargv, buildException)) {
                 haveStart = true;
                 continue;
             }
-            if(eat_valued_option<uint64_t>("-e", ppargv, buildException,
-                                        [&tfOptions](auto n1){ tfOptions.n1 = n1; })) {
+            if(parse_valued_option<uint64_t>("-e", tfOptions.n1, ppargv, buildException)) {
                 haveEnd = true;
                 continue;
             }
@@ -224,13 +315,11 @@ namespace cutrialdive {
                     haveTfBits = true;
                     continue;
             }
-            if(eat_valued_option<uint64_t>("--tf-start", ppargv, buildException,
-                                        [&tfOptions](auto start){ tfOptions.f0 = start; })) {
+            if(parse_valued_option<uint64_t>("--tf-start", tfOptions.f0, ppargv, buildException)) {
                 haveTfStart = true;
                 continue;
             }
-            if(eat_valued_option<uint64_t>("--tf-end", ppargv, buildException,
-                                        [&tfOptions](auto end){ tfOptions.f1 = end; })) {
+            if(parse_valued_option<uint64_t>("--tf-end", tfOptions.f1, ppargv, buildException)) {
                 haveTfEnd = true;
                 continue;
             }
@@ -241,13 +330,13 @@ namespace cutrialdive {
             if(parse_no_progress(*options_, ppargv)) {
                 continue;
             }
-            if(eat_valued_option<std::string>("--output", ppargv, buildException,
-                        [&tfOptions](auto path){ tfOptions.output_path = path; })) {
+            if(parse_valued_option<std::string>("--output", tfOptions.output_path, ppargv, buildException)) {
                 continue;
             }
-            if(eat_valued_option<uint32_t>("--checkpoint-period", ppargv, buildException, [&](auto chkpntPeriod){
-                options_->checkpoint_period = chkpntPeriod;
-            })) {
+            if(parse_valued_option<uint32_t>("--checkpoint-period", options_->checkpoint_period, ppargv, buildException)) {
+                continue;
+            }
+            if(parse_segment_length(*options_, ppargv, buildException)) {
                 continue;
             }
         }
@@ -277,21 +366,17 @@ namespace cutrialdive {
               | ( --num-seq <NUM_SEQ_ID>
                         ( --print n
                         | --print-expression n 
-                        | -s n0 [-e n1] ( --tf-bits bits_count 
-                                        | --tf-start f0 --tf-end f1 )
-                          [--no-progress]
-                          [--output <output_path>]
-                          [--checkpoint-period chkpnt_period]
+                        | <trial factoring options>
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
-R"-(                        | --single-prp n [--factors "f_1, ..., f_m"
-                                                [--no-boost-factors]]
+R"-(                        | <prp test options>
 )-"
 #endif // CUTRIALDIVE_ENABLE_PRP
 R"-(                        )
                 )
-              | --resume <checkpoint_path> [--checkpoint-period chkpnt_period]
+              | --resume <checkpoint_path> <resume options>
               )
+              [<global options>]
 )-"
         ;
     }
@@ -315,6 +400,19 @@ R"-(                        )
     --version
             prints the version number and exits.
     
+    Global options
+    --------------
+    --threads <N>
+            Use up to N concurrent threads.
+
+    --verbosity <V>
+            Set log verbosity level to V where V is an integer in range [0, 4]
+            0: silent (no messages)
+            1: normal
+            2: verbose
+            3: debug
+            4: diagnostic
+    
     Number sequence selection
     -------------------------
     --num-seq <NUM_SEQ_ID>
@@ -325,7 +423,7 @@ R"-(                        )
     Print number
     ------------
     --print n
-            prints S(n) in base 10
+            prints S(n) in base 10.
 
     --print-expression n
             prints an expression whose evaluation yields S(n). For example
@@ -333,10 +431,16 @@ R"-(                        )
 
     Trial factoring
     ---------------
+    If no output path is specified (i.e. option --output is missing) then
+    the results are written to the console and checkpointing is deactivated.
+    If an output path P is specified then P.chkpnt is reserved for the
+    checkpoint file. The checkpoint file is deleted upon succesful completion
+    of the trial factoring.
+
     Use options -s and -e to specify the range of indices [n0, n1[:
 
     -s n0
-            Processing will start with S(n0)
+            Processing will start with S(n0).
     -e n1
             Processing will end with S(k) where k is the largest integer such
             that n0 <= k < n1.
@@ -345,20 +449,60 @@ R"-(                        )
     Use option --tf-bits or --tf-start and --tf-end to specify the range
     to sieve for prime numbers to consider:
 
-    --tf-bits  bits_count
-            Use the primes in [0, 2^bits_count[
+    --tf-bits bits_count
+            Use the primes in [0, 2^bits_count[.
 
     --tf-start f0
-            Lower bound of the set of primes to consider
+            Lower bound of the set of primes to consider.
 
     --tf-end f1
-            Upper bound of the set of primes to consider (f1 is excluded)
+            Upper bound of the set of primes to consider (f1 is excluded).
 
     --no-progress
-            Suppresses progress display
+            Suppresses progress display.
 
     --output <path>
-            Causes the output to be written to the given path
+            Causes the output to be written to the given path.
+
+    --checkpoint-period T
+            Minimum duration in seconds between two checkpoint file savings.
+
+    --segment-bits <L>
+            Use 2^L as the length of the sieve segment, not compatible
+            with --segment-length
+    --segment-length <N>
+            Use N as the length of the sieve segment, not compatible
+            with --segment-bits.
+            The default sieve segment length is 2^26.
+)-"
+#ifdef CUTRIALDIVE_ENABLE_GPU
+R"-(
+    -g <device_id>
+            Id of the device to run the trial factoring on.
+
+    --grid-size N
+            Override default grid size (blocks per kernel launch) with N.
+
+    --block-size N
+            Override default block size (threads per block) with N.
+)-"
+#endif
+R"-(
+    Resuming a trial factoring
+    --------------------------
+    An interrupted trial factoring can be resumed with option --resume.
+    In the resume mode some of the options above can be specified/altered.
+
+    --resume <checkpoint file path>
+            Resume an interrupted trial factoring.
+    
+    The options available in resume mode are the following: --threads,
+    --no-progress, --checkpoint-period)-"
+#ifdef CUTRIALDIVE_ENABLE_GPU
+                                  R"-(, -g, --grid-size, --block-size
+)-"
+#endif
+R"-(        and any of the global options.
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
 R"-(
@@ -390,7 +534,7 @@ R"-(
 )-"
 #endif // CUTRIALDIVE_ENABLE_PRP
 R"-(
-)-"        ;
+)-";
     }
 
 }

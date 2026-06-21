@@ -6,7 +6,6 @@
 
 #include <iostream>
 #include <numeric>
-#include <omp.h>
 
 namespace cutrialdive {
 
@@ -34,7 +33,6 @@ namespace cutrialdive {
 
             auto const chunkSize = chunk.size();
             if(chunkSize >= blockSize) {
-                #pragma omp parallel for schedule(static)
                 for(uint64_t i = 0; i < chunkSize - (blockSize - 1); i += blockSize) {
                     reciprocals[i] = reciprocal(normalize(chunkData[i]));
                     reciprocals[i] = reciprocal(normalize(chunkData[i+1]));

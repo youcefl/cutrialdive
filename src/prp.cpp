@@ -13,6 +13,7 @@
 #include "number_sequence_helpers.hpp"
 #include "timer.hpp"
 #include "num_seq_dispatch.hpp"
+#include "logger.hpp"
 
 bool isPRP(HgInt number)
 {
@@ -28,7 +29,8 @@ namespace cutrialdive {
 
     template <typename NumberSequenceT>
         requires NumberSequence<NumberSequenceT>
-    void run_prp_test(uint64_t n,
+    void run_prp_test(
+        uint64_t n,
         std::vector<factor<uint64_t, uint32_t>> & factors,
         bool haveToBoostFactors,
         std::ostream & out,
@@ -43,7 +45,7 @@ namespace cutrialdive {
             auto number = pureSeq.value(n);
             timer t{(std::string{"Computing the cofactor of "}
                         + numberAsStr + " took ").c_str(), out};
-            out << "Boosting factors: " << std::boolalpha << haveToBoostFactors << std::endl;
+            CTDLOG_VERBOSE() << "Boosting factors: " << std::boolalpha << haveToBoostFactors << std::endl;
             cofactor = haveToBoostFactors ? compute_cofactor_boosted(number, factors)
                         : compute_cofactor_exact(number, factors);
             out << "Factors: ";
@@ -73,8 +75,6 @@ namespace cutrialdive {
         std::ostream & out
     )
     {
-        timer tfTimer{"PRP test took ", std::cout};
-
         dispatch_num_seq<decltype(n)>(numSeqSpec, [&]<typename Seq, typename... Args>(Args&&... args) {
             run_prp_test<Seq>(n, factors, haveToBoostFactors, std::cout, std::forward<Args>(args)...);
         });

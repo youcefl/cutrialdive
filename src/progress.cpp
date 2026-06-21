@@ -46,8 +46,9 @@ namespace {
 
 namespace cutrialdive {
 
-    progress::progress(uint64_t target, std::chrono::milliseconds period, std::ostream & out)
-        : target_(target)
+    progress::progress(uint64_t start, uint64_t target, std::chrono::milliseconds period, std::ostream & out)
+        : start_(start)
+        , target_(target)
         , period_(period)
         , out_(out)
         , ended_(false)
@@ -74,7 +75,7 @@ namespace cutrialdive {
           && (current != target_)) {
             return;
         }
-        auto percentDone = double((__uint128_t(current) * inFactor) / target_) / outFactor;
+        auto percentDone = double(((__uint128_t(current) - start_) * inFactor) / (target_ - start_)) / outFactor;
         auto elapsedTime = std::chrono::duration<double>(now - start_time_).count();
 
         static const std::string spaces(128, ' ');

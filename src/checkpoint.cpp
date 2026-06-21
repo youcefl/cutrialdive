@@ -10,6 +10,8 @@
 #include <string>
 #include <cassert>
 
+#include "logger.hpp"
+
 namespace {
     using namespace cutrialdive;
 
@@ -167,8 +169,10 @@ namespace cutrialdive {
         auto now = std::chrono::system_clock::now();
         auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
         auto tmpChkpntPath = checkpoint_path_;
+
         tmpChkpntPath += ".tmp_";
         tmpChkpntPath += std::to_string(ns);
+        CTDLOG_DEBUG() << "About to write checkpoint to temporary file `" << tmpChkpntPath << "'" << std::endl;
         std::ofstream out{tmpChkpntPath, std::ios::binary};
         if(!out) {
             throw std::runtime_error{"Could not create temporary file `" + tmpChkpntPath.string() + "'"};
@@ -180,14 +184,21 @@ namespace cutrialdive {
         write_pod(out, engineState.last_processed_prime);
         serialize_factors_buffer(out, engineState.factors_buffer.get());
         out.flush();
+    
+        CTDLOG_DEBUG() << "About to rename file `" << tmpChkpntPath
+                       << "' to `" << checkpoint_path_ << "'" << std::endl;
+    
         std::filesystem::rename(tmpChkpntPath, checkpoint_path_);
         last_write_time_ = std::chrono::steady_clock::now();
     }
 
     std::optional<checkpoint_data> checkpoint_manager::load(std::filesystem::path const & checkpointPath)
     {
+        CTDLOG_DEBUG() << "About to read checkpoint file at `" << checkpointPath << "'" << std::endl;
+
         std::ifstream in{checkpointPath, std::ios::binary};
         if(!in) {
+            CTDLOG_DEBUG() << "Could not read checkpoint file at `" << checkpointPath << "'" << std::endl;
             return {};
         }
         auto version = read_pod<uint32_t>(in);
@@ -210,6 +221,7 @@ namespace cutrialdive {
 
     void checkpoint_manager::remove_checkpoint()
     {
+        CTDLOG_DEBUG() << "Removing file `" << checkpoint_path_ << "'" << std::endl;
         std::filesystem::remove(checkpoint_path_);
     }
 }

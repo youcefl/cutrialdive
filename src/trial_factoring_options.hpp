@@ -9,7 +9,7 @@
 #include <ostream>
 #include <chrono>
 #include <filesystem>
-
+#include "options.hpp"
 
 namespace cutrialdive {
 
@@ -36,11 +36,21 @@ namespace cutrialdive {
     /// Execution options
     struct tf_runtime_options
     {
-        uint32_t threads_count;
+        /// Common options
+        runtime_options common_options;
+        /// @brief Checkpointing period in seconds: minimum time between checkpoint file writes.
         std::chrono::seconds checkpoint_period;
+        /// @brief Progress period in milliseconds: minimum time between progress output
         std::chrono::milliseconds progress_period;
         /// @brief Whether to display progress
         bool is_progress_enabled;
+        /// @brief length of sieve segments
+        uint64_t segment_length;
+#ifdef CUTRIALDIVE_ENABLE_GPU
+        int32_t device_id;
+        std::optional<int32_t> grid_size;
+        std::optional<int32_t> block_size;
+#endif
 
         static tf_runtime_options default_options();
     };

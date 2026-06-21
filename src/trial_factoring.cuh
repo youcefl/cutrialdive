@@ -23,6 +23,7 @@
 #include "progress.hpp"
 #include "checkpoint.hpp"
 #include "trial_factoring_context.hpp"
+#include "logger.hpp"
 
 
 namespace cutrialdive {
@@ -235,6 +236,73 @@ namespace cutrialdive {
         return std::chrono::duration<double>(now - start).count();
     }
 
+    struct kernel_launch_config
+    {
+        uint8_t batch_size;
+        int grid_size;
+        int block_size;
+        double max_occupancy;
+    };
+
+    template <typename NumberSequenceT, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
+        requires PureMathSequence<NumberSequenceT>
+    inline
+    std::vector<kernel_launch_config> get_occupancy_info(cudaDeviceProp & prop, tf_runtime_options const & rtOpts)
+    {
+        if(rtOpts.grid_size.has_value() && rtOpts.block_size.has_value()) {
+            std::vector<kernel_launch_config> result;
+            for(int batchSize = 1; batchSize <= 3; ++batchSize) {
+                result.emplace_back(batchSize, *rtOpts.grid_size, *rtOpts.block_size);
+            }
+            return result;
+        }
+        auto kernels = {
+            trial_div_by_odd_primes<NumberSequenceT, 1, uint64_t, precomputeReciprocals>,
+            trial_div_by_odd_primes<NumberSequenceT, 2, uint64_t, precomputeReciprocals>,
+            trial_div_by_odd_primes<NumberSequenceT, 3, uint64_t, precomputeReciprocals>
+        };
+        std::vector<kernel_launch_config> result;
+        result.reserve(3);
+
+        uint8_t batchSize{1};
+        for(auto & ker : kernels) {
+            int blockSize = rtOpts.block_size.value_or([&](){
+                int minGridSize{};
+                int tmpBlockSize{};
+                auto err = cudaOccupancyMaxPotentialBlockSize(&minGridSize, &tmpBlockSize, ker);
+                if(err != cudaSuccess) {
+                    tmpBlockSize = 256;
+                    std::cout << "Error while getting block size:" << std::endl;
+                    std::cout << cudaGetErrorString(err) << std::endl;
+                    std::cout << "Using default value " << tmpBlockSize << std::endl;
+                }
+                return tmpBlockSize;
+            }());
+            
+            int gridSize = rtOpts.grid_size.value_or([&](){
+                int maxBlocksPerSM;
+                auto err = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+                            &maxBlocksPerSM, ker, blockSize, 0);
+                if(err != cudaSuccess) {
+                    maxBlocksPerSM = 64;
+                    std::cout << "Error while getting maximum blocks per SM:" << std::endl;
+                    std::cout << cudaGetErrorString(err) << std::endl;
+                    std::cout << "Using default value " << maxBlocksPerSM << std::endl;
+                }
+                return prop.multiProcessorCount * maxBlocksPerSM * 4;             
+            }());
+    
+            result.emplace_back(batchSize, gridSize, blockSize);
+
+            CTDLOG_DEBUG() << "Kernel launch config for batch size " << uint32_t(batchSize) 
+                << ": <<<" << gridSize << ", " << blockSize << ">>>" << std::endl;
+
+            ++batchSize;
+        }
+        return result;
+    }
+
+
     template <typename NumberSequenceT>
         requires PureMathSequence<NumberSequenceT>
     inline
@@ -243,18 +311,45 @@ namespace cutrialdive {
         NumberSequenceT numSeq
         )
     {
+        int const deviceId = ctx.runtime_options.device_id;
+        CTDLOG_DEBUG() << "About to perform trial factoring on device " << deviceId << "...\n" << ctx.options << std::endl;
         auto const & opts = ctx.options;
         auto & out = ctx.output_stream;
         auto resumeState = ctx.resume_state;
         auto checkpoint = ctx.checkpoint;
-        print_gpu_device_info(0, out);
 
-        int numSMs;
-        cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
+        CTDLOG_DIAG() << "Calling cudaSetDevice(" << deviceId << ")" << std::endl;
+        auto cudaErr = cudaSetDevice(deviceId);
+        if(cudaErr != cudaSuccess) {
+            out << "Error selecting device " << deviceId << ": "
+                << cudaGetErrorString(cudaErr) << std::endl;
+            return;
+        }
+        print_gpu_device_info(deviceId, out);
+        cudaDeviceProp prop;
+        cudaErr = cudaGetDeviceProperties(&prop, deviceId);
+        if(cudaErr != cudaSuccess) {
+            out << "Error getting device properties: "
+                << cudaGetErrorString(cudaErr) << std::endl;
+            return;
+        }
+        CTDLOG_VERBOSE() << "Number of SMs: " << prop.multiProcessorCount << std::endl;
+        if(ctx.runtime_options.grid_size.has_value()) {
+            CTDLOG_INFO() << "Using non-default value " << *ctx.runtime_options.grid_size << " for grid size." << std::endl;
+        }
+        if(ctx.runtime_options.block_size.has_value()) {
+            CTDLOG_INFO() << "Using non-default value " << *ctx.runtime_options.block_size << " for block size." << std::endl;
+        }
+
+
         auto tfStart = std::chrono::high_resolution_clock::now();
         double sieveTime{}, computeDataTime{}, copyPrimeDataToHostTime{};
     
         constexpr auto precomputeReciprocals = PrecomputeReciprocals::no;
+        auto kernelConfigs = get_occupancy_info<NumberSequenceT, uint64_t, precomputeReciprocals>(
+            prop,
+            ctx.runtime_options
+          );
         prime_data<uint64_t, precomputeReciprocals> primeData;
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
@@ -270,8 +365,9 @@ namespace cutrialdive {
         device_tf_data<NumberSequenceT, uint64_t, precomputeReciprocals> tf_data{
             numSeq, opts.n0, opts.n1, devicePrimeData.get_data(), factorsBuffer.device_view()};
 
+        auto f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         auto progressHandler = ctx.runtime_options.is_progress_enabled
-                ? std::make_unique<progress>(opts.f1, ctx.runtime_options.progress_period, out) 
+                ? std::make_unique<progress>(f0, opts.f1, ctx.runtime_options.progress_period, out) 
                 : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler
             ? std::function<void(uint64_t, uint64_t)>{[&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
@@ -280,16 +376,16 @@ namespace cutrialdive {
             : std::function<void(uint64_t, uint64_t)>{[](auto, auto) {}};
 
         // Special treatment for 2 if needed
-        auto f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         if(f0 <= 2 && opts.f1 > 2) {
             f0 = 3;
             trial_div_by_2<NumberSequenceT, uint64_t, precomputeReciprocals><<<1, 1>>>(tf_data.device_view());
         }
 
-        constexpr auto segmentLen = uint64_t{1} << 26;
+        auto const segmentLen = ctx.runtime_options.segment_length;
+        CTDLOG_VERBOSE() << "Length of sieve segment: " << segmentLen << std::endl;
         auto const f1 = opts.f1;
         auto lastPrimeOfPreviousSeg = uint64_t{};
-        siever primeGen{ctx.runtime_options.threads_count};
+        siever primeGen{ctx.runtime_options.common_options.threads_count};
 
         out << "Sieving for primes using ";
         if(primeGen.threads_count() == 1) {
@@ -301,10 +397,13 @@ namespace cutrialdive {
         primes.reserve(primeGen.threads_count());
 
         // Main loop for odd primes only
+        decltype(opts.f1) lastSegEnd{};
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
             fx < f1;
             fx = fy, fy = (std::min)(fy + segmentLen, f1)
         ) {
+            CTDLOG_DIAG() << "Sieving segment [" << fx << ", " << fy << "[" << "\n";
+            lastSegEnd = fy;
             auto sieveStart = std::chrono::high_resolution_clock::now();
             primeGen.sieve(fx, fy, primes);
             sieveTime += delta_now(sieveStart);
@@ -333,11 +432,14 @@ namespace cutrialdive {
             tf_data.prime_data = devicePrimeData.get_data();
 
             if(fy <= 2642258) {
-                trial_div_by_odd_primes<NumberSequenceT, 3, uint64_t, precomputeReciprocals><<<256*numSMs, 256>>>(tf_data.device_view());
+                trial_div_by_odd_primes<NumberSequenceT, 3, uint64_t, precomputeReciprocals>
+                    <<<kernelConfigs[2].grid_size, kernelConfigs[2].block_size>>>(tf_data.device_view());
             } else if(fy <= (1ull << 32)) {
-                trial_div_by_odd_primes<NumberSequenceT, 2, uint64_t, precomputeReciprocals><<<256*numSMs, 256>>>(tf_data.device_view());
+                trial_div_by_odd_primes<NumberSequenceT, 2, uint64_t, precomputeReciprocals>
+                    <<<kernelConfigs[1].grid_size, kernelConfigs[1].block_size>>>(tf_data.device_view());
             } else {
-                trial_div_by_odd_primes<NumberSequenceT, 1, uint64_t, precomputeReciprocals><<<256*numSMs, 256>>>(tf_data.device_view());
+                trial_div_by_odd_primes<NumberSequenceT, 1, uint64_t, precomputeReciprocals>
+                    <<<kernelConfigs[0].grid_size, kernelConfigs[0].block_size>>>(tf_data.device_view());
             }
             auto err = cudaGetLastError();
             if(err != cudaSuccess) {
@@ -347,6 +449,9 @@ namespace cutrialdive {
             lastPrimeOfPreviousSeg = !primes.empty() ? primes.back().back() : 0;
         }
         device_synchronize(out);
+        if(lastSegEnd && lastPrimeOfPreviousSeg) {
+            updateProgress(lastSegEnd, lastPrimeOfPreviousSeg);
+        }
         if(progressHandler) {
             progressHandler->end();
         }

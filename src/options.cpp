@@ -1,0 +1,19 @@
+/*
+* Created on 2026.06.18
+* Copyright (c) Youcef Lemsafer
+*/
+#include "options.hpp"
+
+
+namespace cutrialdive {
+
+    runtime_options runtime_options::default_options()
+    {
+        return {
+            .threads_count = 4,
+            .verbosity_level = verbosity::normal
+        };
+    }
+
+
+}

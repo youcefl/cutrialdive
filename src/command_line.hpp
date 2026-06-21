@@ -12,6 +12,7 @@
 #include "trial_factoring_options.hpp"
 #include "factor.hpp"
 #include "num_seq_id.hpp"
+#include "verbosity.hpp"
 
 namespace cutrialdive {
 
@@ -27,6 +28,13 @@ namespace cutrialdive {
         std::optional<std::uint32_t> checkpoint_period;
         std::optional<bool> is_progress_enabled;
         std::optional<uint32_t> threads_count;
+        std::optional<uint64_t> segment_length;
+        std::optional<verbosity> verbosity_level;
+#ifdef CUTRIALDIVE_ENABLE_GPU
+        std::optional<int32_t> device_id;
+        std::optional<int32_t> grid_size;
+        std::optional<int32_t> block_size;
+#endif
 
         num_seq_id seq_id;
         std::string seq_params;

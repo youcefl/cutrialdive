@@ -4,7 +4,7 @@
 #
 
 cmake_minimum_required(VERSION 3.20)
-project(cutrialdive VERSION 0.0.1 LANGUAGES CXX)
+project(cutrialdive VERSION 1.0.0 LANGUAGES CXX)
 add_compile_definitions(CUTRIALDIVE_VERSION="${PROJECT_VERSION}")
 
 option(CUTRIALDIVE_ENABLE_GPU "Build with CUDA GPU support" OFF)
@@ -20,7 +20,7 @@ if(CUTRIALDIVE_ENABLE_GPU)
     set(CUDA_STANDARD_REQUIRED ON)
     find_package(CUDAToolkit REQUIRED)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES "61;75;86;89;100;120-virtual")
+        set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89;90;100;103;120;121")
     endif()
     enable_language(CUDA)
     add_compile_definitions(CUTRIALDIVE_ENABLE_GPU)
@@ -45,7 +45,6 @@ find_library(GMP_LIBRARY gmp
     HINTS ${GMP_ROOT} $ENV{GMP_ROOT}
     PATH_SUFFIXES lib
 )
-find_package(OpenMP REQUIRED)
 
 if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
     message(FATAL_ERROR "GMP not found. Install libgmp-dev or set GMP_ROOT to the install prefix.")
@@ -92,7 +91,6 @@ if(CUTRIALDIVE_USE_LFP)
 else()
     target_link_libraries(cutrialdive_core PUBLIC primesieve::primesieve)
 endif()
-target_link_libraries(cutrialdive_core PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(cutrialdive PRIVATE cutrialdive_core)
 target_link_libraries(cutrialdive PRIVATE ${GMP_LIBRARY})
 if(CUTRIALDIVE_ENABLE_PRP)

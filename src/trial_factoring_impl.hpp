@@ -14,7 +14,6 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <omp.h>
 
 #ifdef CUTRIALDIVE_ENABLE_GPU
 #include "trial_factoring.cuh"
@@ -34,6 +33,7 @@
 #include "progress.hpp"
 #include "checkpoint.hpp"
 #include "trial_factoring_context.hpp"
+#include "logger.hpp"
 
 
 namespace cutrialdive {
@@ -118,7 +118,7 @@ namespace details {
         NumberSequenceT & numSeq,
         factors_buffer<uint64_t> & factorsBuf,
         std::function<void(uint64_t, uint64_t)> updateProgress
-      ) : threads_count_(ctx.runtime_options.threads_count)
+      ) : threads_count_(ctx.runtime_options.common_options.threads_count)
         , n0_(ctx.options.n0)
         , num_seq_(numSeq)
         , first_number_(first_value(num_seq_, n0_))
@@ -266,6 +266,8 @@ namespace details {
         uint64_t f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         uint64_t f1 = opts.f1;
 
+        CTDLOG_DEBUG() << "Resuming with options: {\n" << opts << "\n}" << std::endl;
+
         if(resumeState) {
             out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
         }
@@ -275,7 +277,7 @@ namespace details {
                 : factors_buffer<uint64_t>{n0, n1 - n0, opts.max_factors_per_number};
 
         auto progressHandler = ctx.runtime_options.is_progress_enabled 
-                ? std::make_unique<progress>(f1, ctx.runtime_options.progress_period, out)
+                ? std::make_unique<progress>(f0, f1, ctx.runtime_options.progress_period, out)
                 : std::unique_ptr<progress>{};
         auto updateProgress = progressHandler ? std::function<void(uint64_t, uint64_t)>{
                     [&progressHandler](auto segUpperBound, auto lastPrimeInSeg) {
@@ -298,12 +300,16 @@ namespace details {
             }
         }
 
-        constexpr auto segmentLen = uint64_t{1} << 26;
+        auto const segmentLen = ctx.runtime_options.segment_length;
+        CTDLOG_VERBOSE() << "Sieve segment length: " << segmentLen << std::endl;
         std::vector<std::span<uint64_t>> primes;
         auto checkpoint = ctx.checkpoint;
-        siever primeGen{ctx.runtime_options.threads_count};
+        siever primeGen{ctx.runtime_options.common_options.threads_count};
 
         trial_factorer<NumberSequenceT> factorer{ctx, numSeq, factorsBuf, updateProgress};
+
+        decltype(f1) lastSegEnd{};
+        decltype(primes)::value_type::element_type lastPrime{};
 
         for (auto fx = f0, fy = (std::min)(f0 + segmentLen, f1);
             fx < f1;
@@ -311,10 +317,11 @@ namespace details {
         ) {
             primes.clear();
             primeGen.sieve(fx, fy, primes);
+            lastSegEnd = fy;
 
             factorer.process_chunks(primes);
 
-            auto lastPrime = !primes.empty() ? primes.back().back() : 0;
+            lastPrime = !primes.empty() ? primes.back().back() : 0;
             updateProgress(fy, lastPrime);
             if(!primes.empty() && checkpoint && checkpoint->due()) {
                 checkpoint->write(engine_state{
@@ -322,6 +329,9 @@ namespace details {
                     factors_buffer_holder{&factorsBuf}
                 });
             }
+        }
+        if(lastSegEnd && lastPrime) {
+            updateProgress(lastSegEnd, lastPrime);
         }
         if(progressHandler) {
             progressHandler->end();
@@ -372,7 +382,6 @@ namespace details {
                            : "the console.")
             << std::endl;
         out << "TF range is [" << opts.f0 << ", " << opts.f1 << "[." << std::endl;
-        out << "Will use up to " << omp_get_max_threads() << " threads on the CPU." << std::endl;
         auto checkpoint = ctx.checkpoint;
         if(checkpoint) {
             auto checkpointPath = checkpoint->checkpoint_path();
