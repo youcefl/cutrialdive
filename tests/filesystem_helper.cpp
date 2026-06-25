@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.06.09
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #ifdef _WIN32
 #  include <windows.h>

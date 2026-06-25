@@ -1,10 +1,13 @@
 /*
+* MIT License
 * Created on 2021.12.23
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 
 #include <cinttypes>
+#include <memory>
 #include <chrono>
 #include <iostream>
 #include <iomanip>
@@ -354,9 +357,17 @@ namespace cutrialdive {
         primeData.reserve(1ull << 22);
         device_prime_data<uint64_t, precomputeReciprocals> devicePrimeData;
 
-        device_factors_buffer<uint64_t> factorsBuffer = resumeState 
-                ? device_factors_buffer<uint64_t>{resumeState->factors_buffer.get()}
-                : device_factors_buffer<uint64_t>{opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number};
+        std::unique_ptr<factors_buffer<uint64_t>> ownedHostFactorsBuf;
+        factors_buffer<uint64_t> * hostFactorsBuf = nullptr;
+
+        if(resumeState) {
+            hostFactorsBuf = &resumeState->factors_buffer.get();
+        } else {
+            ownedHostFactorsBuf = std::make_unique<factors_buffer<uint64_t>>(
+                                    opts.n0, opts.n1 - opts.n0, opts.max_factors_per_number);
+            hostFactorsBuf = ownedHostFactorsBuf.get();
+        }
+        device_factors_buffer<uint64_t> factorsBuffer = device_factors_buffer<uint64_t>{*hostFactorsBuf};
 
         if(resumeState) {
             out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
@@ -419,9 +430,11 @@ namespace cutrialdive {
             if(lastPrimeOfPreviousSeg) {
                 updateProgress(fx, lastPrimeOfPreviousSeg);
                 if(checkpoint && checkpoint->due()) {
+                    factorsBuffer.to_host_factors_buffer<uint64_t>(*hostFactorsBuf);
+                    hostFactorsBuf->report_excess_factors_if_any();
                     checkpoint->write(engine_state{
                         lastPrimeOfPreviousSeg,
-                        factors_buffer_holder{factorsBuffer.to_host_factors_buffer<uint64_t>()}
+                        factors_buffer_holder{hostFactorsBuf}
                     });
                 }
             }
@@ -463,7 +476,9 @@ namespace cutrialdive {
         }
         out << "Copying prime data to device took " << copyPrimeDataToHostTime << "s (cumulated time)" << std::endl;
 
-        ctx.results = factorsBuffer.to_factoring_results<uint64_t, uint32_t>();
+        factorsBuffer.to_host_factors_buffer<uint64_t>(*hostFactorsBuf);
+        hostFactorsBuf->report_excess_factors_if_any();
+        ctx.results = hostFactorsBuf->to_factoring_results<uint64_t, uint32_t>();
 
         out << "[Factoring took "
                 << std::chrono::duration<double, std::milli>(tfEnd - 

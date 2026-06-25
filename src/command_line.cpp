@@ -1,12 +1,21 @@
 /*
+* MIT License
 * Created on 2026.05.04
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "command_line.hpp"
 
 #include <string.h>
 #include <string>
 #include <sstream>
+#ifdef CUTRIALDIVE_HAS_PRIMESIEVE
+#include <primesieve.h>
+#endif
+#include <gmp.h>
+#ifdef CUTRIALDIVE_ENABLE_GPU
+#include <cuda_runtime_api.h>
+#endif
 
 #include "common_defines.h"
 #include "factor.hpp"
@@ -144,7 +153,7 @@ namespace {
     inline
     bool parse_device_options(command_line_options & options, char**& argv, ExceptionBuilder buildException)
     {
-        if(parse_valued_option<int32_t>("-g", options.device_id, argv, buildException)) {
+        if(parse_valued_option<int32_t>("--device", options.device_id, argv, buildException)) {
             return true;
         }
         if(parse_valued_option<int32_t>("--grid-size", options.grid_size, argv, buildException)) {
@@ -260,6 +269,9 @@ namespace cutrialdive {
             if(parse_verbosity(*options_, ppargv, buildException)) {
                 continue;
             }
+            if(parse_valued_option<uint32_t>("--threads", options_->threads_count, ppargv, buildException)) {
+                continue;
+            }
             if(eat_valued_option<uint64_t>("--print", ppargv, buildException, [this](auto n) {
                 options_->wants_value = true;
                 options_->n = n;
@@ -273,18 +285,23 @@ namespace cutrialdive {
                 return;
             }
 #ifdef CUTRIALDIVE_ENABLE_PRP
-            if(eat_valued_option<uint64_t>("--single-prp", ppargv, buildException, [this](auto n) {
-                options_->wants_single_prp = true;
+            if(eat_valued_option<uint64_t>("--prp", ppargv, buildException, [this](auto n) {
+                options_->wants_prp = true;
                 options_->n = n;
             })) {
-                std::vector<factor<uint64_t, uint32_t>> factors;
-                eat_valued_option<std::string>("--factors", ppargv, buildException, [&](auto factors_str) {
+                continue;
+            }
+            if(eat_valued_option<std::string>("--factors", ppargv, buildException, [&](auto factors_str) {
                     options_->factors = parse_factors<uint64_t, uint32_t>(factors_str);
-                });
-                if(*ppargv && !strcmp(*ppargv, "--no-boost-factors")) {
-                    options_->wants_boosted_factors = false;
-                }
-                return;
+            })) {
+                continue;
+            }
+            if(!strcmp(*ppargv, "--no-boost-factors")) {
+                options_->wants_boosted_factors = false;
+                continue;
+            }
+            if(options_->wants_prp) {
+                continue;
             }
 #endif // CUTRIALDIVE_ENABLE_PRP
 #ifdef CUTRIALDIVE_ENABLE_GPU
@@ -292,9 +309,6 @@ namespace cutrialdive {
                 continue;
             }
 #endif
-            if(parse_valued_option<uint32_t>("--threads", options_->threads_count, ppargv, buildException)) {
-                continue;
-            }
             if(parse_valued_option<uint64_t>("-s", tfOptions.n0, ppargv, buildException)) {
                 haveStart = true;
                 continue;
@@ -339,7 +353,15 @@ namespace cutrialdive {
             if(parse_segment_length(*options_, ppargv, buildException)) {
                 continue;
             }
+            if(parse_valued_option<uint32_t>("--max-factors-per-number", tfOptions.max_factors_per_number, ppargv, buildException)) {
+                continue;
+            }
         }
+#ifdef CUTRIALDIVE_ENABLE_PRP
+        if(options_->wants_prp) {
+            return;
+        }
+#endif // CUTRIALDIVE_ENABLE_PRP
         auto mandatoryFlags = std::array{haveStart, haveTfStart || haveTfBits, haveTfEnd || haveTfBits};
         if(std::any_of(std::begin(mandatoryFlags), std::end(mandatoryFlags), [](auto val){ return !val; })) {
             throw command_line_parse_exception{"Missing mandatory option"};
@@ -355,7 +377,21 @@ namespace cutrialdive {
 
     void print_version(std::ostream & out)
     {
-        out << "cutrialdive version " << CUTRIALDIVE_VERSION << std::endl;
+        out << "cutrialdive version " << CUTRIALDIVE_VERSION << std::endl
+            << "Copyright 2026 Youcef Lemsafer" << std::endl
+            << "[Compiled with gcc " << __VERSION__ << "]"
+#ifdef CUTRIALDIVE_HAS_PRIMESIEVE
+            << " [primesieve " << PRIMESIEVE_VERSION << "]"
+#endif
+            << " [GMP " << __GNU_MP_VERSION << "." << __GNU_MP_VERSION_MINOR
+                << "." << __GNU_MP_VERSION_PATCHLEVEL << "]" << std::endl;
+#ifdef CUTRIALDIVE_ENABLE_GPU
+        int major = CUDART_VERSION / 1000;
+        int minor = (CUDART_VERSION % 1000) / 10;
+        int patch = CUDART_VERSION % 10;
+        out << "[CUDA compiler version " << major << "." << minor << "." << patch
+            << ", arch=" << CUDA_ARCHS << "]." << std::endl;
+#endif
     }
 
     void print_usage_only(std::ostream & out)
@@ -417,7 +453,7 @@ R"-(                        )
     -------------------------
     --num-seq <NUM_SEQ_ID>
             Selects a number sequence to work on, possible values of
-            <NUM_SEQ_ID> are: smarandache[,base], mersenne.
+            <NUM_SEQ_ID> are: smarandache[,base], mersenne, proth,k.
             smarandache,2 means Smarandache base 2, default is base 10.
 
     Print number
@@ -450,7 +486,7 @@ R"-(                        )
     to sieve for prime numbers to consider:
 
     --tf-bits bits_count
-            Use the primes in [0, 2^bits_count[.
+            Use the primes in [2, 2^bits_count[.
 
     --tf-start f0
             Lower bound of the set of primes to consider.
@@ -474,10 +510,18 @@ R"-(                        )
             Use N as the length of the sieve segment, not compatible
             with --segment-bits.
             The default sieve segment length is 2^26.
+
+--max-factors-per-number <N>
+            Set the maximum number of factors stored per sequence term.
+            Default is 32.
+            If more than N factors are found for a given sequence term,
+            only the first N are stored and a warning is emitted.
+            Increasing this value may be useful for highly composite
+            sequence terms, but it also increases memory usage linearly.
 )-"
 #ifdef CUTRIALDIVE_ENABLE_GPU
 R"-(
-    -g <device_id>
+    --device <device_id>
             Id of the device to run the trial factoring on.
 
     --grid-size N
@@ -502,13 +546,14 @@ R"-(
                                   R"-(, -g, --grid-size, --block-size
 )-"
 #endif
-R"-(        and any of the global options.
+R"-(        and any of the global options. Options -s, -e, --tf-bits,
+    --tf-start, --output are not allowed when resuming a trial factoring.
 )-"
 #ifdef CUTRIALDIVE_ENABLE_PRP
 R"-(
     PRP test
     --------
-    --single-prp n
+    --prp n
             Perform a PRP test on the cofactor of S(n).
 
     If --factors is provided, the factors are divided out before the test.
@@ -534,8 +579,32 @@ R"-(
 )-"
 #endif // CUTRIALDIVE_ENABLE_PRP
 R"-(
+    Examples
+    --------
+    # Proth numbers k*2^n+1, TF to 2^40, 50000 candidates n in 
+    # [30e6, 30e6+50000[, k=12345678910111213
+    cutrialdive --num-seq proth,12345678910111213 -s 30000000 \
+                    -e 30050000 --tf-bits 40 --output output.txt
+
+    # Resume after interruption
+    cutrialdive --resume output.txt.chkpnt
+
+    # Print a expression that evaluates to Smarandache base 2 index 37
+    cutrialdive --num-seq smarandache,2 --print-expression 37
+
+    # Print Sm2(37) in base 10
+    cutrialdive --num-seq smarandache,2 --print 37
+)-"
+#ifdef CUTRIALDIVE_ENABLE_PRP
+R"-(
+    # Perform a PRP test on the Smarandache base 11 cofactor
+    # Sm11(5544)/(2^3*5*11*355049*11699161)
+    cutrialdive --num-seq smarandache,11 --prp 5544 \
+                    --factors "2, 5, 11, 355049, 11699161"
+)-"
+#endif
+R"-(
 )-";
     }
-
 }
 

@@ -1,7 +1,9 @@
 /*
- * Creation date: 2026.05.19
- * Created by Youcef Lemsafer
- */
+* MIT License
+* Created on 2026.05.19
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
+*/
 #pragma once
 
 #include <cstdint>

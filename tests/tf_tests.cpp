@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.06.03
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include <sstream>
 #include <catch2/catch_test_macros.hpp>

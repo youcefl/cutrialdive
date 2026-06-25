@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.05.26
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include <sstream>
 #include <string>

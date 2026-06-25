@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.04.30
 * Copyright Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 

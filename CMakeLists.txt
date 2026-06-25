@@ -1,6 +1,8 @@
 #
+# MIT License
 # Created on 2026.05.14
 # Copyright (c) Youcef Lemsafer
+# See LICENSE file for details.
 #
 
 cmake_minimum_required(VERSION 3.20)
@@ -22,6 +24,7 @@ if(CUTRIALDIVE_ENABLE_GPU)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89;90;100;103;120;121")
     endif()
+    set(CUDA_ARCHS ${CMAKE_CUDA_ARCHITECTURES})
     enable_language(CUDA)
     add_compile_definitions(CUTRIALDIVE_ENABLE_GPU)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-std=c++20>)
@@ -83,6 +86,13 @@ list(FILTER SOURCES EXCLUDE REGEX "main\\.cpp$")
 add_library(cutrialdive_core STATIC ${SOURCES})
 
 add_executable(cutrialdive src/main.cpp)
+
+if(CUTRIALDIVE_ENABLE_GPU)
+    target_compile_definitions(cutrialdive_core PRIVATE
+        CUDA_ARCHS="${CUDA_ARCHS}"
+    )    
+    target_link_libraries(cutrialdive_core PRIVATE CUDA::cudart)
+endif()
 
 target_include_directories(cutrialdive_core PUBLIC ${GMP_INCLUDE_DIR})
 target_include_directories(cutrialdive_core PUBLIC src)

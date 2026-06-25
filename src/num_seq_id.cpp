@@ -1,6 +1,8 @@
 /*
-* Creation date: 2026.04.29
-* Created by Youcef Lemsafer
+* MIT License
+* Created on 2026.04.29
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "num_seq_id.hpp"
 

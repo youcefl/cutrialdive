@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.06.07
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "checkpoint.hpp"
 
@@ -92,6 +94,8 @@ namespace cutrialdive {
         write_pod(out, factorsBuf.numbers_count_);
         write_pod(out, factorsBuf.max_factors_per_number_);
         write_pod(out, factorsBuf.n0_);
+        // No need to deal with has_excess_factors_ and last_computed_max_factors_count_
+        // they will be reevaluated during TF
 
         assert(factorsBuf.numbers_count_ == factorsBuf.factors_count_.size());
 
@@ -114,6 +118,7 @@ namespace cutrialdive {
     factors_buffer<PrimeT> deserialize_factors_buffer(std::istream & in)
     {
         factors_buffer<PrimeT> factorsBuf{0, 0, 0};
+
         factorsBuf.numbers_count_ = read_pod<decltype(factorsBuf.numbers_count_)>(in);
         factorsBuf.max_factors_per_number_ = read_pod<decltype(factorsBuf.max_factors_per_number_)>(in);
         factorsBuf.n0_ = read_pod<decltype(factorsBuf.n0_)>(in);

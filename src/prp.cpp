@@ -1,7 +1,9 @@
 /*
- * Youcef Lemsafer
- * 2023.01.19
- */
+* MIT License
+* Created on 2023.01.19
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
+*/
 #include "prp.hpp"
 
 #include <iostream>

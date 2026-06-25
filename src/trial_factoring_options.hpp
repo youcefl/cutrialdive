@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.05.04
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 
@@ -25,8 +27,8 @@ namespace cutrialdive {
         uint64_t f1;
         /// @brief Optional: path of the output file
         std::optional<std::filesystem::path> output_path;
-        /// @brief Maximum number of factors per number (default = 128)
-        uint32_t max_factors_per_number{128};
+        /// @brief Maximum number of factors per number (default = 32)
+        uint32_t max_factors_per_number{32};
 
         bool operator==(trial_factoring_options const&) const = default;        
     };

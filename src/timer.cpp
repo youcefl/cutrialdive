@@ -1,6 +1,8 @@
 /*
-* Youcef Lemsafer
-* 2026.04.27
+* MIT License
+* Created on 2026.04.27
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "timer.hpp"
 

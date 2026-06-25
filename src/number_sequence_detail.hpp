@@ -1,6 +1,8 @@
 /*
-* Creation date: 2026.06.02
-* Created by Youcef Lemsafer
+* MIT License
+* Created on 2026.06.02
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 

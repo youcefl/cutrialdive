@@ -1,6 +1,8 @@
 /*
-* Youcef Lemsafer, 2026.04.21
-* Definition of the sieving back-end
+* MIT License
+* Created on 2026.04.21
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 

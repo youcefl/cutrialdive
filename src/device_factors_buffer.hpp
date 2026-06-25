@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.05.03
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 
@@ -35,10 +37,9 @@ namespace cutrialdive {
 
         device_view_t device_view() const;
 
-        /// Returns factoring results suitable for writing in the output file
-        template <typename PrimeT, typename ExponentT>
-        factoring_results<PrimeT, ExponentT> to_factoring_results() const;
-
+        template <typename PrimeT>
+        void to_host_factors_buffer(factors_buffer<PrimeT> & hostFactorsBuf) const;
+        /// @overload
         template <typename PrimeT>
         factors_buffer<PrimeT> to_host_factors_buffer() const;
 
@@ -92,6 +93,23 @@ namespace cutrialdive {
     }
 
     template <typename ValueT>
+    template <typename PrimeT>
+    inline
+    void device_factors_buffer<ValueT>::to_host_factors_buffer(factors_buffer<PrimeT> & hostFactorsBuf) const
+    {
+        static_assert(std::is_same_v<PrimeT, ValueT>); // PrimeT != ValueT not supported
+
+        if( (n0_ == hostFactorsBuf.n0_)
+          && (numbers_count_ == hostFactorsBuf.numbers_count_)
+          && (max_factors_per_number_ == hostFactorsBuf.max_factors_per_number_) ) {
+            copy_from_device(&hostFactorsBuf.factors_count_[0], factors_count_.data(), factors_count_.size());
+            copy_from_device(&hostFactorsBuf.factors_[0], factors_.data(), factors_.size());
+            return;
+        }
+        hostFactorsBuf = to_host_factors_buffer<PrimeT>();
+    }
+
+    template <typename ValueT>
     inline
     typename device_factors_buffer<ValueT>::device_view_t device_factors_buffer<ValueT>::device_view() const
     {
@@ -108,14 +126,6 @@ namespace cutrialdive {
         }
         // We do not report inability to add the factor here, it is done later
         // by comparing factors_count_[numberIdx] to max_factors_per_number_
-    }
-
-    template <typename ValueT>
-    template <typename PrimeT, typename ExponentT>
-    inline
-    factoring_results<PrimeT, ExponentT> device_factors_buffer<ValueT>::to_factoring_results() const
-    {
-        return to_host_factors_buffer<PrimeT>().template to_factoring_results<PrimeT, ExponentT>();
     }
 
 }

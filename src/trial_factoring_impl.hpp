@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.06.04
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 
@@ -324,6 +326,7 @@ namespace details {
             lastPrime = !primes.empty() ? primes.back().back() : 0;
             updateProgress(fy, lastPrime);
             if(!primes.empty() && checkpoint && checkpoint->due()) {
+                factorsBuf.report_excess_factors_if_any();
                 checkpoint->write(engine_state{
                     lastPrime,
                     factors_buffer_holder{&factorsBuf}
@@ -337,6 +340,7 @@ namespace details {
             progressHandler->end();
         }
         ctx.results = factorsBuf.to_factoring_results<uint64_t, uint32_t>();
+        factorsBuf.report_excess_factors_if_any();
     }
 
 
@@ -406,5 +410,11 @@ namespace details {
         if(checkpoint) {
             checkpoint->remove_checkpoint();
         }
+        // Print some stats
+        CTDLOG_INFO() 
+            << "Maximum number of factors found for a single sequence term: " 
+                                                << results.max_factors_count() << std::endl
+            << "Overall number of factors found: " << results.factors_count() << std::endl;
+
     }
 }

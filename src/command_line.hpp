@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.05.04
 * Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #pragma once
 
@@ -42,7 +44,7 @@ namespace cutrialdive {
         bool wants_expression;
         uint64_t n;
 #ifdef CUTRIALDIVE_ENABLE_PRP 
-        bool wants_single_prp;
+        bool wants_prp;
         bool wants_boosted_factors{true};
         std::vector<factor<uint64_t, uint32_t>> factors;
 #endif

@@ -1,6 +1,8 @@
 /*
+* MIT License
 * Created on 2026.04.30
-* Copyright Youcef Lemsafer
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "modular_arithmetic_detail.hpp"
 

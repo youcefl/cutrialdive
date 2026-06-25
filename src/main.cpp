@@ -1,5 +1,8 @@
 /*
-* Youcef Lemsafer, 2026.04.21
+* MIT License
+* Created on 2026.04.21
+* Copyright (c) Youcef Lemsafer
+* See LICENSE file for details.
 */
 #include "command_line.hpp"
 
@@ -123,7 +126,7 @@ int main(int argc, char** argv)
             return print_expression(numSeqSpec, cmdOptions.n, std::cout);
         }
 #ifdef CUTRIALDIVE_ENABLE_PRP
-        if(cmdOptions.wants_single_prp) {
+        if(cmdOptions.wants_prp) {
             ctd::run_prp_test(
                 numSeqSpec,
                 cmdOptions.n,
