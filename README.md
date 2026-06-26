@@ -1,6 +1,7 @@
 [![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml) [![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml)
 
-# cutrialdive
+<h1 align="center">cutrialdive</h1>
+<p align="center"><em>GPU-accelerated trial factoring for some number sequences</em></p>
 
 ## What it is
 
@@ -28,7 +29,7 @@ Alternatively, the project can be built from source with CMake.
 
 Below are a few examples of use to get you started.
 
-$Sm(n) = 12345...\overline{n}$ is concatenation of the base 10 representation of the first n integers $\ge 1$.
+$Sm(n) = 12345...\overline{n}$ is the concatenation of the base 10 representation of the first n integers $\ge 1$.
 
 To trial-factor the Smarandache numbers $Sm(10)=12345678910,\dots,Sm(999)=12345\ldots998999$
 using all primes in the range $\left[0,2^{37}\right[$:
