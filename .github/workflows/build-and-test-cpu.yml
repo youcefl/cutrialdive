@@ -1,0 +1,34 @@
+#
+# MIT License
+# Created on 2026.06.25
+# Copyright (c) 2026 Youcef Lemsafer
+# See LICENSE file for more details.
+#
+
+name: cpu-build-and-test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+
+jobs:
+  build-and-test-cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libprimesieve-dev cmake
+      - name: Build CPU version
+        run: |
+          mkdir build-cpu && cd build-cpu
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCUTRIALDIVE_ENABLE_GPU=OFF \
+            -DCUTRIALDIVE_ENABLE_PRP=OFF -DGMP_ROOT=/usr -Dprimesieve_DIR=/usr/lib/x86_64-linux-gnu/cmake/primesieve
+          make -j$(nproc)
+      - name: Run tests
+        run: |
+          ./build-cpu/tests/cutrialdive_tests

@@ -1,0 +1,35 @@
+#
+# MIT License
+# Created on 2026.06.25
+# Copyright (c) 2026 Youcef Lemsafer
+# See LICENSE file for more details.
+#
+
+name: gpu-build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+
+jobs:
+  build-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install CUDA
+        run: |
+          wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update
+          sudo apt-get install -y cuda-toolkit-12-6 libgmp-dev libprimesieve-dev cmake
+      - name: Build GPU version
+        run: |
+          export CUDACXX=/usr/local/cuda/bin/nvcc
+          mkdir build-gpu && cd build-gpu
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCUTRIALDIVE_ENABLE_GPU=ON \
+            -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+            -DCUTRIALDIVE_ENABLE_PRP=OFF -DGMP_ROOT=/usr -Dprimesieve_DIR=/usr/lib/x86_64-linux-gnu/cmake/primesieve
+          cmake --build . -j $(nproc)

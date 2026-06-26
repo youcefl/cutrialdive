@@ -88,9 +88,8 @@ add_library(cutrialdive_core STATIC ${SOURCES})
 add_executable(cutrialdive src/main.cpp)
 
 if(CUTRIALDIVE_ENABLE_GPU)
-    target_compile_definitions(cutrialdive_core PRIVATE
-        CUDA_ARCHS="${CUDA_ARCHS}"
-    )    
+    string(REPLACE ";" ", " CUDA_ARCHS_STR "${CMAKE_CUDA_ARCHITECTURES}")
+    target_compile_definitions(cutrialdive_core PRIVATE CUDA_ARCHS="${CUDA_ARCHS_STR}")
     target_link_libraries(cutrialdive_core PRIVATE CUDA::cudart)
 endif()
 

@@ -24,6 +24,7 @@ namespace cutrialdive {
     struct factor {
         PrimeT prime;
         ExponentT exponent;
+        factor(PrimeT p, ExponentT e);
     };
 
     /// Sorts the factors in the given span (from lowest to highest)
@@ -44,6 +45,13 @@ namespace cutrialdive {
 
 
 namespace cutrialdive {
+
+    template <typename PrimeT, typename ExponentT>
+    inline
+    factor<PrimeT, ExponentT>::factor(PrimeT p, ExponentT e)
+        : prime(p)
+        , exponent(e)
+    {}
 
     template <typename PrimeT, typename ExponentT>
     inline

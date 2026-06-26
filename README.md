@@ -1,3 +1,4 @@
+[![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml) [![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml)
 
 # cutrialdive
 

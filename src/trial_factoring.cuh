@@ -6,7 +6,7 @@
 */
 #pragma once
 
-#include <cinttypes>
+#include <cstdint>
 #include <memory>
 #include <chrono>
 #include <iostream>
@@ -244,7 +244,10 @@ namespace cutrialdive {
         uint8_t batch_size;
         int grid_size;
         int block_size;
-        double max_occupancy;
+
+        kernel_launch_config(uint8_t batchSize, int gridSize, int blockSize)
+            : batch_size(batchSize), grid_size(gridSize), block_size(blockSize)
+        {}
     };
 
     template <typename NumberSequenceT, typename PrimeT, PrecomputeReciprocals precomputeReciprocals>
@@ -254,7 +257,7 @@ namespace cutrialdive {
     {
         if(rtOpts.grid_size.has_value() && rtOpts.block_size.has_value()) {
             std::vector<kernel_launch_config> result;
-            for(int batchSize = 1; batchSize <= 3; ++batchSize) {
+            for(uint8_t batchSize = 1; batchSize <= 3; ++batchSize) {
                 result.emplace_back(batchSize, *rtOpts.grid_size, *rtOpts.block_size);
             }
             return result;

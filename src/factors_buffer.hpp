@@ -130,7 +130,7 @@ namespace cutrialdive {
         for(std::size_t i = 0; i < numbers_count_; ++i) {
             // Can not store more than max_factors_per_number_ factors.
             auto count = (std::min)(factors_count_[i], max_factors_per_number_);
-            auto span = std::span{&factors_[i * max_factors_per_number_], count};
+            auto span = std::span<PrimeT>{&factors_[i * max_factors_per_number_], count};
             sort_factors(span);
             results.add_factors(span, factors_count_[i]);
         }
