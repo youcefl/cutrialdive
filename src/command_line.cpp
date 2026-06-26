@@ -13,9 +13,6 @@
 #include <primesieve.h>
 #endif
 #include <gmp.h>
-#ifdef CUTRIALDIVE_ENABLE_GPU
-#include <cuda_runtime_api.h>
-#endif
 
 #include "common_defines.h"
 #include "factor.hpp"
@@ -386,11 +383,8 @@ namespace cutrialdive {
             << " [GMP " << __GNU_MP_VERSION << "." << __GNU_MP_VERSION_MINOR
                 << "." << __GNU_MP_VERSION_PATCHLEVEL << "]" << std::endl;
 #ifdef CUTRIALDIVE_ENABLE_GPU
-        int major = CUDART_VERSION / 1000;
-        int minor = (CUDART_VERSION % 1000) / 10;
-        int patch = CUDART_VERSION % 10;
-        out << "[CUDA compiler version " << major << "." << minor << "." << patch
-            << ", arch=" << CUDA_ARCHS << "]." << std::endl;
+        out << "[CUDA compiler version " << CUTRIALDIVE_CUDA_VERSION
+            << ", arch=\"" << CUDA_ARCHS << "\"]." << std::endl;
 #endif
     }
 
@@ -511,7 +505,7 @@ R"-(                        )
             with --segment-bits.
             The default sieve segment length is 2^26.
 
---max-factors-per-number <N>
+    --max-factors-per-number <N>
             Set the maximum number of factors stored per sequence term.
             Default is 32.
             If more than N factors are found for a given sequence term,

@@ -18,6 +18,10 @@ set(CMAKE_STANDARD_REQUIRED ON)
 
 
 if(CUTRIALDIVE_ENABLE_GPU)
+    if(NOT DEFINED CUDA_RT_LIB)
+        set(CUDA_RT_LIB Shared)
+    endif()
+
     set(CMAKE_CUDA_STANDARD 20)
     set(CUDA_STANDARD_REQUIRED ON)
     find_package(CUDAToolkit REQUIRED)
@@ -26,6 +30,7 @@ if(CUTRIALDIVE_ENABLE_GPU)
     endif()
     set(CUDA_ARCHS ${CMAKE_CUDA_ARCHITECTURES})
     enable_language(CUDA)
+    set(CMAKE_CUDA_RUNTIME_LIBRARY ${CUDA_RT_LIB})
     add_compile_definitions(CUTRIALDIVE_ENABLE_GPU)
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-std=c++20>)
 endif()
@@ -88,9 +93,11 @@ add_library(cutrialdive_core STATIC ${SOURCES})
 add_executable(cutrialdive src/main.cpp)
 
 if(CUTRIALDIVE_ENABLE_GPU)
-    string(REPLACE ";" ", " CUDA_ARCHS_STR "${CMAKE_CUDA_ARCHITECTURES}")
+    string(REPLACE ";" "," CUDA_ARCHS_STR "${CMAKE_CUDA_ARCHITECTURES}")
     target_compile_definitions(cutrialdive_core PRIVATE CUDA_ARCHS="${CUDA_ARCHS_STR}")
-    target_link_libraries(cutrialdive_core PRIVATE CUDA::cudart)
+    target_compile_definitions(cutrialdive_core PRIVATE
+        CUTRIALDIVE_CUDA_VERSION="${CUDAToolkit_VERSION}"
+    )
 endif()
 
 target_include_directories(cutrialdive_core PUBLIC ${GMP_INCLUDE_DIR})
@@ -105,9 +112,6 @@ target_link_libraries(cutrialdive PRIVATE ${GMP_LIBRARY})
 if(CUTRIALDIVE_ENABLE_PRP)
     target_include_directories(cutrialdive_core PUBLIC ${GWNUM_INCLUDE})
     target_link_libraries(cutrialdive PRIVATE ${GWNUM_LIB})
-endif()
-if(CUTRIALDIVE_ENABLE_GPU)
-    target_link_libraries(cutrialdive PRIVATE CUDA::cudart)
 endif()
 
 install(TARGETS cutrialdive RUNTIME DESTINATION bin)
