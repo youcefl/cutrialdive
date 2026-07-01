@@ -131,6 +131,13 @@ namespace cutrialdive {
                 }
                 return dispatch_num_seq_impl<proth, IndexT>(func, *k);
             }
+            case num_seq_id::riesel: {
+                auto k = details::parse_int<uint64_t>(numSeqSpec.seq_params);
+                if(!k) {
+                    throw std::runtime_error{"Missing or invalid k value `" + numSeqSpec.seq_params + "' in Riesel sequence spec"};
+                }
+                return dispatch_num_seq_impl<riesel, IndexT>(func, *k);
+            }
             case num_seq_id::smarandache: {
                 auto base = numSeqSpec.seq_params.empty()
                             ? std::optional<uint64_t>{10}

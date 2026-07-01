@@ -447,7 +447,8 @@ R"-(                        )
     -------------------------
     --num-seq <NUM_SEQ_ID>
             Selects a number sequence to work on, possible values of
-            <NUM_SEQ_ID> are: smarandache[,base], mersenne, proth,k.
+            <NUM_SEQ_ID> are: smarandache[,base], mersenne, proth,k,
+            riesel,k.
             smarandache,2 means Smarandache base 2, default is base 10.
 
     Print number

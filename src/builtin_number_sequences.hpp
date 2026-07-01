@@ -7,6 +7,6 @@
 #pragma once
 
 #include "number_sequences/mersenne.hpp"
-#include "number_sequences/proth.hpp"
+#include "number_sequences/riesel_proth.hpp"
 #include "number_sequences/smarandache.hpp"
 

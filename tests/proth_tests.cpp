@@ -7,7 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "number_sequences/proth.hpp"
+#include "number_sequences/riesel_proth.hpp"
 #include "barrett_reciprocals.hpp"
 
 

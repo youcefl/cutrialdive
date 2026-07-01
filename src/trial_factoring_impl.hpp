@@ -242,15 +242,15 @@ namespace details {
             pending_chunks_.insert({chunk.front(), prevChunkLastPrime});
             prevChunkLastPrime = chunk.back();
         }
+        std::unique_lock<std::mutex> lck{chunk_queue_mutex_};
         for(auto chunk : primes) {
-            std::unique_lock<std::mutex> lck{chunk_queue_mutex_};
             chunk_queue_.push_back(chunk);
-            lck.unlock();
             chunk_enqueued_.notify_one();
         }
         // Wait until all workers are done
-        std::unique_lock<std::mutex> lck{chunk_queue_mutex_};
-        chunk_processed_.wait(lck, [&]{ return !pending_chunks_count_.load(std::memory_order_relaxed); });
+        chunk_processed_.wait(lck, [&]{
+            return !pending_chunks_count_.load(std::memory_order_relaxed);
+        });
     }
 
     template <typename NumberSequenceT>
@@ -268,7 +268,7 @@ namespace details {
         uint64_t f0 = resumeState ? resumeState->last_processed_prime + 1 : opts.f0;
         uint64_t f1 = opts.f1;
 
-        CTDLOG_DEBUG() << "Resuming with options: {\n" << opts << "\n}" << std::endl;
+        CTDLOG_DEBUG() << "Starting with options: {\n" << opts << "\n}" << std::endl;
 
         if(resumeState) {
             out << "Resuming at the smallest prime > " << resumeState->last_processed_prime << "." << std::endl;
