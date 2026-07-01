@@ -32,6 +32,7 @@ set(SOURCES
     filesystem_helper.cpp
     mersenne_tests.cpp
     proth_tests.cpp
+    riesel_tests.cpp
     smarandache_tests.cpp
     smarandache_gp_tests.cpp
     test_modular.cpp

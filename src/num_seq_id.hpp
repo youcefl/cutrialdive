@@ -17,6 +17,7 @@ namespace cutrialdive {
     {
         mersenne,
         proth,
+        riesel,
         smarandache
     };
 
@@ -39,6 +40,7 @@ namespace cutrialdive {
         switch(numSeqId) {
             case num_seq_id::mersenne: return {"mersenne"};
             case num_seq_id::proth: return {"proth"};
+            case num_seq_id::riesel: return {"riesel"};
             case num_seq_id::smarandache: return {"smarandache"};
         }
         return "<unknown number sequence id>";

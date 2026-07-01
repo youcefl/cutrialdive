@@ -6,7 +6,7 @@
 #
 
 cmake_minimum_required(VERSION 3.20)
-project(cutrialdive VERSION 1.0.0 LANGUAGES CXX)
+project(cutrialdive VERSION 1.1.0 LANGUAGES CXX)
 add_compile_definitions(CUTRIALDIVE_VERSION="${PROJECT_VERSION}")
 
 option(CUTRIALDIVE_ENABLE_GPU "Build with CUDA GPU support" OFF)

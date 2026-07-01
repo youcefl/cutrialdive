@@ -27,6 +27,7 @@ namespace cutrialdive {
         static const std::unordered_map<std::string, num_seq_id> flags_map {
             {"mersenne", num_seq_id::mersenne},
             {"proth", num_seq_id::proth},
+            {"riesel", num_seq_id::riesel},
             {"smarandache", num_seq_id::smarandache},
         };
         auto it = flags_map.find(numSeqIdAsStr);
