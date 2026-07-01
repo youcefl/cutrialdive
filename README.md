@@ -1,4 +1,4 @@
-[![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml) [![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml)
+[![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-and-test-cpu.yml) [![CI](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml/badge.svg)](https://github.com/youcefl/cutrialdive/actions/workflows/build-gpu.yml) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red.svg)](https://github.com/sponsors/youcefl)
 
 <h1 align="center">cutrialdive</h1>
 <p align="center"><em>GPU-accelerated trial factoring for some number sequences</em></p>
@@ -21,6 +21,7 @@ The integer sequences already supported are
 | $M_n$ | ${2}^{n}-1$ | mersenne |
 | $Sm_b(n)$ | Concatenation of the first n integers written in base b | smarandache,b |
 | $Pr_k(n)$ | $k\cdot{2}^{n}+1$ | proth,k |
+| $R_k(n)$ | $k\cdot{2}^{n}-1$ | riesel,k |
 
 ## Getting started
 
