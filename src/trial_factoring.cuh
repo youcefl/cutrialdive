@@ -179,15 +179,33 @@ namespace cutrialdive {
             }
             uint64_t residue;
 
-            auto barrettMu = compute_barrett_mu_numseq<NumberSequenceT>(divisor);
+            auto mu = compute_barrett_mu_numseq<NumberSequenceT>(divisor);
+            auto state = [&](){
+                if constexpr(HasState<NumberSequenceT>) {
+                    if constexpr(HasMakeStateWithMu<NumberSequenceT>) {
+                        return data.num_seq.make_state(data.n0, divisor, mu);
+                    } else {
+                        return data.num_seq.make_state(data.n0, divisor);
+                    }
+                } else {
+                    return no_state_t{};
+                }
+            }();
+            if constexpr(!HasState<NumberSequenceT>) {
+                (void)state;
+            }
             if constexpr(InitializeFromValue<NumberSequenceT>) {
                 if constexpr ((BatchSize == 1) && (precomputeReciprocals == PrecomputeReciprocals::yes)) {
                     residue = modnby1(data.value, data.value_length, divisor, data.prime_data.reciprocals[i]);
                 } else {
                     residue = modnby1(data.value, data.value_length, divisor);
                 }
+            } else if constexpr(HasValueModMuWithState<NumberSequenceT>) {
+                residue = data.num_seq.value_mod_mu(data.n0, divisor, mu, state);
             } else if constexpr(HasValueModMu<NumberSequenceT>) {
-                residue = data.num_seq.value_mod_mu(data.n0, divisor, barrettMu);
+                residue = data.num_seq.value_mod_mu(data.n0, divisor, mu);
+            } else if constexpr(HasValueModWithState<NumberSequenceT>) {
+                residue = data.num_seq.value_mod(data.n0, divisor, state);
             } else {
                 residue = data.num_seq.value_mod(data.n0, divisor);
             }
@@ -195,8 +213,12 @@ namespace cutrialdive {
 
             /// Propagate residues to next numbers in sequence
             for(auto n = data.n0, nEnd = data.n1 - 1; n < nEnd; ++n) {
-                if constexpr(HasNextValueModMu<NumberSequenceT>) {
-                    residue = data.num_seq.next_value_mod_mu(residue, n, divisor, barrettMu);
+                if constexpr(HasNextValueModMuWithState<NumberSequenceT>) {
+                    residue = data.num_seq.next_value_mod_mu(residue, n, divisor, mu, state);
+                } else if constexpr(HasNextValueModMu<NumberSequenceT>) {
+                    residue = data.num_seq.next_value_mod_mu(residue, n, divisor, mu);
+                } else if constexpr(HasNextValueModWithState<NumberSequenceT>) {
+                    residue = data.num_seq.next_value_mod(residue, n, divisor, state);
                 } else {
                     residue = data.num_seq.next_value_mod(residue, n, divisor);
                 }

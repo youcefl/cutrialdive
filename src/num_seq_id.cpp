@@ -29,6 +29,11 @@ namespace cutrialdive {
             {"proth", num_seq_id::proth},
             {"riesel", num_seq_id::riesel},
             {"smarandache", num_seq_id::smarandache},
+            {"fibonacci", num_seq_id::fibonacci},
+            {"lucas", num_seq_id::lucas},
+            {"proth_fixed_n", num_seq_id::proth_fixed_n},
+            {"riesel_fixed_n", num_seq_id::riesel_fixed_n},
+            {"tribonacci", num_seq_id::tribonacci}
         };
         auto it = flags_map.find(numSeqIdAsStr);
         if(it == flags_map.end()) {

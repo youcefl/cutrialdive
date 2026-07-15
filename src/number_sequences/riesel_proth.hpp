@@ -26,6 +26,7 @@ namespace cutrialdive {
     public:
         using index_type = uint64_t;
         using residue_type = uint64_t;
+        using mu_type = mu_both_t;
 
         /// @pre k > 0
         riesel_proth_math(uint64_t k);

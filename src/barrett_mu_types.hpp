@@ -12,7 +12,7 @@
 namespace cutrialdive {
 
     /// No Barrett multiplication
-    struct no_barrett_t {};
+    struct no_mu_t {};
 
     /// The Barrett 64-bit reciprocal
     struct mu64_t {

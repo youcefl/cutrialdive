@@ -18,7 +18,12 @@ namespace cutrialdive {
         mersenne,
         proth,
         riesel,
-        smarandache
+        smarandache,
+        fibonacci,
+        lucas,
+        proth_fixed_n,
+        riesel_fixed_n,
+        tribonacci
     };
 
     /// Returns a string
@@ -42,6 +47,11 @@ namespace cutrialdive {
             case num_seq_id::proth: return {"proth"};
             case num_seq_id::riesel: return {"riesel"};
             case num_seq_id::smarandache: return {"smarandache"};
+            case num_seq_id::fibonacci: return {"fibonacci"};
+            case num_seq_id::lucas: return {"lucas"};
+            case num_seq_id::proth_fixed_n: return {"proth_fixed_n"};
+            case num_seq_id::riesel_fixed_n: return {"riesel_fixed_n"};
+            case num_seq_id::tribonacci: return {"tribonacci"};
         }
         return "<unknown number sequence id>";
     }

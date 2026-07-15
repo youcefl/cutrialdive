@@ -37,6 +37,9 @@ set(SOURCES
     smarandache_gp_tests.cpp
     test_modular.cpp
     tf_tests.cpp
+    fibonacci_tests.cpp
+    lucas_tests.cpp
+    tribonacci_tests.cpp
 )
 if(CUTRIALDIVE_ENABLE_GPU)
     list(APPEND SOURCES ./tf.cu)

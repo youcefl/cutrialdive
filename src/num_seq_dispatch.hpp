@@ -122,8 +122,7 @@ namespace cutrialdive {
         using details::dispatch_num_seq_impl;
         auto numSeqId = numSeqSpec.seq_id;
         switch (numSeqId) {
-            case num_seq_id::mersenne:
-                return dispatch_num_seq_impl<mersenne, IndexT>(func);
+            case num_seq_id::mersenne: return dispatch_num_seq_impl<mersenne, IndexT>(func);
             case num_seq_id::proth: {
                 auto k = details::parse_int<uint64_t>(numSeqSpec.seq_params);
                 if(!k) {
@@ -147,6 +146,23 @@ namespace cutrialdive {
                 }
                 return details::dispatch_smarandache<IndexT>(*base, func);
             }
+            case num_seq_id::fibonacci: return dispatch_num_seq_impl<fibonacci, IndexT>(func);
+            case num_seq_id::lucas: return dispatch_num_seq_impl<lucas, IndexT>(func);
+            case num_seq_id::proth_fixed_n: {
+                auto n = details::parse_int<uint64_t>(numSeqSpec.seq_params);
+                if(!n) {
+                    throw std::runtime_error{"Missing or invalid n value `" + numSeqSpec.seq_params + "' in Proth number spec"};
+                }
+                return dispatch_num_seq_impl<proth_fixed_n, IndexT>(func, *n);
+            }
+            case num_seq_id::riesel_fixed_n: {
+                auto n = details::parse_int<uint64_t>(numSeqSpec.seq_params);
+                if(!n) {
+                    throw std::runtime_error{"Missing or invalid n value `" + numSeqSpec.seq_params + "' in Riesel sequence spec"};
+                }
+                return dispatch_num_seq_impl<riesel_fixed_n, IndexT>(func, *n);
+            }
+            case num_seq_id::tribonacci: return dispatch_num_seq_impl<tribonacci, IndexT>(func);
             default: throw details::unexpected_num_seq_id_exception(numSeqId);
         }
     }

@@ -198,12 +198,30 @@ namespace details {
         size_t const iEnd = primes.size();
         for(auto i = 0; i < iEnd; ++i) {
             auto p = primes[i];
-            auto barrettMu = compute_barrett_mu_numseq<NumberSequenceT>(p);
+            auto mu = compute_barrett_mu_numseq<NumberSequenceT>(p);
+            auto state = [&](){
+                if constexpr(HasState<NumberSequenceT>) {
+                    if constexpr(HasMakeStateWithMu<NumberSequenceT>) {
+                        return num_seq_.make_state(n0_, p, mu);
+                    } else {
+                        return num_seq_.make_state(n0_, p);
+                    }
+                } else {
+                    return no_state_t{};
+                }
+            }();
+            if constexpr(!HasState<NumberSequenceT>) {
+                (void)state;
+            }
             auto residue = [&](){
                 if constexpr(InitializeFromValue<NumberSequenceT>) {
                     return first_number_.mod(p);
+                } else if constexpr(HasValueModMuWithState<NumberSequenceT>) {
+                    return num_seq_.value_mod_mu(n0_, p, mu, state);
                 } else if constexpr(HasValueModMu<NumberSequenceT>) {
-                    return num_seq_.value_mod_mu(n0_, p, barrettMu);
+                    return num_seq_.value_mod_mu(n0_, p, mu);
+                } else if constexpr(HasValueModWithState<NumberSequenceT>) {
+                    return num_seq_.value_mod(n0_, p, state);
                 } else {
                     return num_seq_.value_mod(n0_, p);
                 }
@@ -213,8 +231,12 @@ namespace details {
             }
             /// Propagate residues to next numbers in sequence
             for(auto n = n0_, nEnd = n1 - 1; n < nEnd; ++n) {
-                if constexpr(HasNextValueModMu<NumberSequenceT>) {
-                    residue = num_seq_.next_value_mod_mu(residue, n, p, barrettMu);
+                if constexpr(HasNextValueModMuWithState<NumberSequenceT>) {
+                    residue = num_seq_.next_value_mod_mu(residue, n, p, mu, state);
+                } else if constexpr(HasNextValueModMu<NumberSequenceT>) {
+                    residue = num_seq_.next_value_mod_mu(residue, n, p, mu);
+                } else if constexpr(HasNextValueModWithState<NumberSequenceT>) {
+                    residue = num_seq_.next_value_mod(residue, n, p, state);
                 } else {
                     residue = num_seq_.next_value_mod(residue, n, p);
                 }
