@@ -6,7 +6,11 @@
 */
 #pragma once
 
+#include "number_sequences/fibonacci.hpp"
+#include "number_sequences/lucas.hpp"
 #include "number_sequences/mersenne.hpp"
 #include "number_sequences/riesel_proth.hpp"
+#include "number_sequences/riesel_proth_fixed_n.hpp"
 #include "number_sequences/smarandache.hpp"
+#include "number_sequences/tribonacci.hpp"
 

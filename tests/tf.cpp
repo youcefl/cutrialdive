@@ -29,14 +29,14 @@ namespace cutrialdive::tests {
     // peano {value_mod, next_value_mod}
     factoring_results<uint64_t, uint32_t> basic_tf_peano(trial_factoring_options const & tfOptions, std::ostream & out)
     {
-        return tf_peano<peano<function_to_define::value_mod,
+        return tf_peano<peano<no_mu_t, function_to_define::value_mod,
                         function_to_define::next_value_mod>>(tfOptions, out);
     }
 
     // peano {value, value_mod_2, value_mod_mu64, next_value_mod}
     factoring_results<uint64_t, uint32_t> value_mod_2_mu64_tf_peano(trial_factoring_options const & tfOptions, std::ostream & out)
     {
-        return tf_peano<peano<function_to_define::value,
+        return tf_peano<peano<mu64_t, function_to_define::value,
                         function_to_define::value_mod_2,
                         function_to_define::value_mod_mu64,
                         function_to_define::next_value_mod>>(tfOptions, out);
@@ -45,7 +45,7 @@ namespace cutrialdive::tests {
     // peano {value, value_mod_2, value_mod_mu128, next_value_mod_2, next_value_mod_mu128}
     factoring_results<uint64_t, uint32_t> value_mod_2_mu128_tf_peano(trial_factoring_options const & tfOptions, std::ostream & out)
     {
-        return tf_peano<peano<function_to_define::value,
+        return tf_peano<peano<mu128_t, function_to_define::value,
                         function_to_define::value_mod_2,
                         function_to_define::value_mod_mu128,
                         function_to_define::next_value_mod_2,

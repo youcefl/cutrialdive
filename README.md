@@ -14,14 +14,21 @@ The current implementation supports Mersenne numbers, Proth numbers, and Smarand
 
 ## Supported integer sequences
 
-The integer sequences already supported are
+The following table lists the supported integer sequences.
 
 | Sequence | Definition | Value of command line switch --num-seq |
 |----------|------------|----------------------------------------|
 | $M_n$ | ${2}^{n}-1$ | mersenne |
 | $Sm_b(n)$ | Concatenation of the first n integers written in base b | smarandache,b |
 | $Pr_k(n)$ | $k\cdot{2}^{n}+1$ | proth,k |
+| $Prn_n(k)$ | $k\cdot{2}^{n}+1$ | proth_fixed_n,n |
 | $R_k(n)$ | $k\cdot{2}^{n}-1$ | riesel,k |
+| $Rn_n(k)$ | $k\cdot{2}^{n}-1$ | riesel_fixed_n,n |
+| $I(n)$ | [Fibonacci sequence](https://en.wikipedia.org/wiki/Fibonacci_sequence) | fibonacci |
+| $L(n)$ | [Lucas numbers](https://en.wikipedia.org/wiki/Lucas_number) | lucas |
+| $T(n)$ | [tribonacci sequence](https://en.wikipedia.org/wiki/Generalizations_of_Fibonacci_numbers#Tribonacci_numbers) | tribonacci |
+
+
 
 ## Getting started
 

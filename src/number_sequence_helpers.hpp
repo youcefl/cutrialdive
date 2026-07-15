@@ -24,7 +24,10 @@ namespace cutrialdive {
 
     template <typename NumberSequenceT>
     CUTRIALDIVE_DEVICE_AND_HOST CUTRIALDIVE_INLINE
-    auto next_value_mod_2(NumberSequenceT seq, typename NumberSequenceT::residue_type r, typename NumberSequenceT::index_type n)
+    auto next_value_mod_2(NumberSequenceT seq,
+        typename NumberSequenceT::residue_type r,
+        typename NumberSequenceT::index_type n
+    )
     {
         if constexpr(HasNextValueModTwo<NumberSequenceT>) {
             return seq.next_value_mod_2(r, n);
@@ -34,6 +37,7 @@ namespace cutrialdive {
     }
 
     template <typename NumberSequenceT>
+    inline
     auto short_name(NumberSequenceT seq)
     {
         if constexpr(HasShortName<NumberSequenceT>) {
@@ -43,4 +47,5 @@ namespace cutrialdive {
         }
     }
 }
+
 

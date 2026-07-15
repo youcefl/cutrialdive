@@ -22,6 +22,7 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
+        using mu_type = mu_both_t;
         static constexpr bool initialize_from_value = false;
 
         static char const* short_name();

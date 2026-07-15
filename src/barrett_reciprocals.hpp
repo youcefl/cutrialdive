@@ -32,17 +32,10 @@ namespace cutrialdive {
     CUTRIALDIVE_DEVICE CUTRIALDIVE_INLINE
     auto compute_barrett_mu_numseq(uint64_t divisor)
     {
-        if constexpr(HasValueModMuImpl<NumberSequenceT, mu_both_t>
-                            || HasNextValueModMuImpl<NumberSequenceT, mu_both_t>) {
-            return compute_barrett_mu<mu_both_t>(divisor);
-        } else if constexpr(HasValueModMuImpl<NumberSequenceT, mu128_t>
-                           || HasNextValueModMuImpl<NumberSequenceT, mu128_t>) {
-            return compute_barrett_mu<mu128_t>(divisor);
-        } else if constexpr(HasValueModMuImpl<NumberSequenceT, mu64_t>
-                    || HasNextValueModMuImpl<NumberSequenceT, mu64_t>) {
-            return compute_barrett_mu<mu64_t>(divisor);
-        }  else {
-            return no_barrett_t{};
+        if constexpr (requires { typename NumberSequenceT::mu_type; }) {
+            return compute_barrett_mu<typename NumberSequenceT::mu_type>(divisor);
+        } else {
+            return no_mu_t{};
         }
     }
 }

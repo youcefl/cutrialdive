@@ -115,8 +115,17 @@ namespace cutrialdive::tests {
         }
     };
 
-    template <function_to_define... funcs>
-    struct peano : peano_function<funcs>...
+
+    template <typename MuType>
+    struct mu_type_provider
+    {
+        using mu_type = MuType;
+    };
+    template <>
+    struct mu_type_provider<no_mu_t> {};
+
+    template <typename MuType, function_to_define... funcs>
+    struct peano : mu_type_provider<MuType>, peano_function<funcs>...
     {
         using index_type = uint64_t;
         using residue_type = uint64_t;

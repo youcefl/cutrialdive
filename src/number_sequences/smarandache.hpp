@@ -28,7 +28,7 @@ namespace cutrialdive {
         using index_type = uint64_t;
         using value_type = HgInt;
         using residue_type = uint64_t;
-        using barrett_mu_type = mu_both_t;
+        using mu_type = mu_both_t;
         static constexpr bool initialize_from_value = true;
 
         static constexpr auto base  = Base;
@@ -56,7 +56,7 @@ namespace cutrialdive {
             residue_type v_n_mod_p,
             index_type n,
             residue_type p,
-            barrett_mu_type mu_p
+            mu_type mu_p
         );
         /// Returns Sm_b(n + 1) mod 2 given Sm_b(n) mod 2 and n
         CUTRIALDIVE_DEVICE_AND_HOST static residue_type next_value_mod_2(
@@ -134,7 +134,7 @@ namespace cutrialdive {
         uint64_t v_n_mod_p,
         uint64_t n,
         uint64_t p,
-        barrett_mu_type mu_p
+        mu_type mu_p
     )
     {
         if constexpr(!(base & (base - 1))) {

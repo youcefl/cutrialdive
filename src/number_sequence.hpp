@@ -28,6 +28,7 @@ namespace cutrialdive {
         (InitializeFromValue<Seq> && HasValue<Seq>)
         || HasValueMod<Seq>
         || HasValueModMu<Seq>
+        || (HasState<Seq> && (HasValueModWithState<Seq> || HasValueModMuWithState<Seq>))
     )
     &&
     (
@@ -35,19 +36,20 @@ namespace cutrialdive {
         (InitializeFromValue<Seq> && HasValue<Seq>)
         || HasValueMod<Seq>
         || HasValueModTwo<Seq>
+        || (HasState<Seq> && (HasValueModWithState<Seq> || HasValueModTwoWithState<Seq>))
     )
     &&
     (
         // Needed for propagation of residues
         HasNextValueMod<Seq> || HasNextValueModMu<Seq>
+        || (HasState<Seq> && (HasNextValueModWithState<Seq> || HasNextValueModMuWithState<Seq>))
     )
     &&
     (
         // Need to be able to propagate residue mod 2
         HasNextValueMod<Seq> || HasNextValueModTwo<Seq>
+        || (HasState<Seq> && (HasNextValueModWithState<Seq> || HasNextValueModTwoWithState<Seq>))
     )
-        // If both value_mod_mu and next_value_mod_mu are provided they have to have the same mu type
-    &&  HaveConsistentMuType<Seq>
     ;
 
     template <typename Seq>

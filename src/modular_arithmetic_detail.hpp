@@ -354,6 +354,55 @@ namespace cutrialdive {
         return (r >= d) ? r - d : r;
     }
 
+    /// Returns a^2 mod d
+    /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t sqrmod(uint64_t a, uint64_t d, uint64_t mu64, __uint128_t mu128)
+    {
+        return mulmod(a, a, d, mu64, mu128);
+    }
+
+    /// Returns 2*a mod d
+    /// @pre a is a residue mod d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t doublemod(uint64_t a, uint64_t d)
+    {
+        return a < d - a ? a << 1 : a - (d - a);
+    }
+
+    /// Returns a - b mod d
+    /// @pre a and b are residues mod d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t submod(uint64_t a, uint64_t b, uint64_t d)
+    {
+        return a >= b ? a - b : d - (b - a);
+    }
+
+    /// Returns a + b mod d
+    /// @pre a and b are residues mod d
+#if !CUTRIALDIVE_IS_CUDA
+    constexpr
+#else
+    inline
+#endif
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t addmod(uint64_t a, uint64_t b, uint64_t d)
+    {
+        return a < d - b ? a + b : a - (d - b);
+    }
+
+
     /// Returns a ^ b mod d
     /// @pre d is odd, mu64 and mu128 are the 64-bit and 128-bit Barrett reciprocals of d
 #if !CUTRIALDIVE_IS_CUDA

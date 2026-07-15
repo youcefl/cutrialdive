@@ -7,8 +7,10 @@
 #pragma once
 
 #include <cstdint>
+#include <stdexcept>
+#include "common_defines.h"
 #include "plus_or_minus.hpp"
-#include "HgInt.hpp"
+#include "hgint.hpp"
 
 
 namespace cutrialdive {
@@ -19,20 +21,26 @@ namespace cutrialdive {
     class riesel_proth_fixed_n_math
     {
     public:
-        using index_type = __uint128_t;
+        using index_type = uint64_t;
         using residue_type = uint64_t;
+        using mu_type = mu_both_t;
+        static const bool has_state = true;
+        using state_type = uint64_t;
 
         riesel_proth_fixed_n_math(uint64_t n);
 
         uint64_t get_n() const;
 
-        HgInt value(__uint128_t k);
-        std::ostream& print_value(__uint128_t k, std::ostream & out);
-        std::ostream& print_expression(__uint128_t k, std::ostream & out);
-        CUTRIALDIVE_DEVICE_AND_HOST uint64_t value_mod_2(__uint128_t k);
-        CUTRIALDIVE_DEVICE_AND_HOST uint64_t value_mod_mu(__uint128_t k, uint64_t d, mu_both_t mu);
-        CUTRIALDIVE_DEVICE_AND_HOST uint64_t next_value_mod_2(uint64_t r, __uint128_t k);
-        CUTRIALDIVE_DEVICE_AND_HOST uint64_t next_value_mod(uint64_t r, __uint128_t k, uint64_t d);
+        /// Returns 2^n mod d
+        CUTRIALDIVE_DEVICE_AND_HOST state_type make_state(index_type k, residue_type d, mu_both_t mu);
+
+        HgInt value(index_type k);
+        std::ostream& print_value(index_type k, std::ostream & out);
+        std::ostream& print_expression(index_type k, std::ostream & out);
+        CUTRIALDIVE_DEVICE_AND_HOST uint64_t value_mod_2(index_type k);
+        CUTRIALDIVE_DEVICE_AND_HOST uint64_t value_mod_mu(index_type k, uint64_t d, mu_both_t mu, state_type & st);
+        CUTRIALDIVE_DEVICE_AND_HOST uint64_t next_value_mod_2(uint64_t r, index_type k);
+        CUTRIALDIVE_DEVICE_AND_HOST uint64_t next_value_mod(uint64_t r, index_type k, uint64_t d, state_type & st);
 
     private:
         uint64_t n_;
@@ -53,6 +61,8 @@ namespace cutrialdive {
         std::string short_name_;
     };
 
+    using riesel_fixed_n = riesel_proth_fixed_n<plus_or_minus::minus>;
+    using proth_fixed_n = riesel_proth_fixed_n<plus_or_minus::plus>;
 }
 
 
@@ -63,6 +73,9 @@ namespace cutrialdive {
     riesel_proth_fixed_n_math<PlusOrMinus>::riesel_proth_fixed_n_math(uint64_t n)
         : n_(n)
     {
+        if(!n) {
+            throw std::invalid_argument{"Invalid n value zero for Riesel/Proth fixed n"};
+        }
     }
 
     template <plus_or_minus PlusOrMinus>
@@ -73,43 +86,47 @@ namespace cutrialdive {
     }
 
     template <plus_or_minus PlusOrMinus>
-    HgInt riesel_proth_fixed_n_math<PlusOrMinus>::value(__uint128_t k)
+    CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
+    riesel_proth_fixed_n_math<PlusOrMinus>::state_type
+    riesel_proth_fixed_n_math<PlusOrMinus>::make_state(index_type k, residue_type d, mu_both_t mu)
+    {
+        return modpow(2, n_, d, mu.mu64, mu.mu128);
+    }
+
+    template <plus_or_minus PlusOrMinus>
+    inline
+    HgInt riesel_proth_fixed_n_math<PlusOrMinus>::value(index_type k)
     {
         return (PlusOrMinus == plus_or_minus::plus) ? (HgInt{k} << n_) + 1 : (HgInt{k} << n_) - 1;
     }
 
     template <plus_or_minus PlusOrMinus>
-    std::ostream& riesel_proth_fixed_n_math<PlusOrMinus>::print_value(__uint128_t k, std::ostream & out)
+    inline
+    std::ostream& riesel_proth_fixed_n_math<PlusOrMinus>::print_value(index_type k, std::ostream & out)
     {
         return out << value(k);
     }
 
     template <plus_or_minus PlusOrMinus>
-    std::ostream& riesel_proth_fixed_n_math<PlusOrMinus>::print_expression(__uint128_t k, std::ostream & out)
+    inline
+    std::ostream& riesel_proth_fixed_n_math<PlusOrMinus>::print_expression(index_type k, std::ostream & out)
     {
-
+        return out << k << "*2^" << n_ << (PlusOrMinus == plus_or_minus::plus ? '+' : '-') << "1";
     }
 
     template <plus_or_minus PlusOrMinus>
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::value_mod_2(__uint128_t k)
+    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::value_mod_2(index_type k)
     {
-        return !n_ ? (k & 1) ^ 1 : 1;
+        return 1;
     }
 
     template <plus_or_minus PlusOrMinus>
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::value_mod_mu(__uint128_t k, uint64_t d, mu_both_t mu)
+    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::value_mod_mu(index_type k, uint64_t d, mu_both_t mu, state_type & st)
     {
-        uint64_t r;
-        if(k >> 64) {
-            auto q = mul128hi(k, mu.mu128);
-            auto tr = k - q*k;
-            r = uint64_t(tr >= d ? tr - d : tr);
-        } else {
-            r = mod(k, d, mu.mu64);
-        }
-        r = mulmod(r, modpow(2, n_, d, mu.mu64, mu.mu128), d, mu.mu64, mu.mu128);
+        uint64_t r = mod(k, d, mu.mu64);
+        r = mulmod(r, st, d, mu.mu64, mu.mu128);
         return (PlusOrMinus == plus_or_minus::plus)
                     ? ((r == d - 1) ? 0 : r + 1)
                     : (!r ? d - 1 : r - 1);
@@ -117,19 +134,48 @@ namespace cutrialdive {
 
     template <plus_or_minus PlusOrMinus>
     CUTRIALDIVE_INLINE CUTRIALDIVE_DEVICE_AND_HOST
-    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::next_value_mod_2(uint64_t r, __uint128_t k)
+    uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::next_value_mod_2(uint64_t r, index_type k)
     {
-        return (n_ == 0) ? k_ & 1 : 1;
+        return 1;
     }
 
     template <plus_or_minus PlusOrMinus>
-    CUTRIALDIVE_DEVICE_AND_HOST uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::next_value_mod_mu(
+    CUTRIALDIVE_DEVICE_AND_HOST uint64_t riesel_proth_fixed_n_math<PlusOrMinus>::next_value_mod(
         uint64_t r,
-        __uint128_t k,
-        uint64_t d
+        index_type k,
+        uint64_t d,
+        state_type & st
       )
     {
-        r +    
+        return (r >= d - st) ? r - (d - st) : r + st;
+    }
+
+
+    template <plus_or_minus PlusOrMinus>
+    inline
+    riesel_proth_fixed_n<PlusOrMinus>::riesel_proth_fixed_n(riesel_proth_fixed_n_math<PlusOrMinus> const & mathSequence)
+        : math_sequence_(mathSequence)
+    {
+        if constexpr(PlusOrMinus == plus_or_minus::plus) {
+            short_name_ = "Prn_";
+        } else {
+            short_name_ = "Rn_";
+        }
+        short_name_ += std::to_string(math_sequence_.get_n());
+    }
+
+    template <plus_or_minus PlusOrMinus>
+    inline
+    riesel_proth_fixed_n_math<PlusOrMinus> riesel_proth_fixed_n<PlusOrMinus>::math_sequence() const
+    {
+        return math_sequence_;
+    }
+
+    template <plus_or_minus PlusOrMinus>
+    inline
+    char const* riesel_proth_fixed_n<PlusOrMinus>::short_name() const
+    {
+        return short_name_.c_str();
     }
 
 }
